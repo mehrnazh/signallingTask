@@ -11,7 +11,7 @@ public class InstructionManager : MonoBehaviour
     public GameObject mainGamePanel;     // Reference to your main game panel
 
     private int currentImageIndex = 0;
-    private bool instructionsComplete = false;
+    public bool instructionsComplete = false;
 
     void Start()
     {

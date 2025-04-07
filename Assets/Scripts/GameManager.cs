@@ -16,7 +16,6 @@ public class GameManager : MonoBehaviour {
     public GameObject fixationPanel;
     public GameObject feedbackPanel; // Optional: Additional visual feedback
     public GameObject interRunPanel; // Inter-run Panel
-    public GameObject instructionPanel;
     public InstructionManager instructionManager;
 
     [Header("UI Texts")]
