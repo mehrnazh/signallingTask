@@ -1,6 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
+using UnityEngine.Localization.Tables;
+using System.Threading.Tasks;
+using RTLTMPro;
 
 public class LegendManager : MonoBehaviour
 {
@@ -9,35 +14,43 @@ public class LegendManager : MonoBehaviour
     public RectTransform legendContainer;
     // Prefab for a legend item (should contain an Image and a child TMP_Text).
     public GameObject legendItemPrefab;
+    // Font asset for RTL text
+    public TMP_FontAsset rtlFontAsset;
     
     // Legend visual parameters.
     public int legendFontSize = 20;           // Font size for legend label text.
     public float squareSize = 20f;            // Width and height of the square.
     public float spacing = 10f;               // Spacing between legend items.
-    
-    private void Start()
-    {
-        CreateLegend();
-    }
+
+    // Localization table reference
+    private const string UILocalizationTable = "UI";
+
+    private bool isLegendCreated = false;
     
     /// <summary>
-    /// Clears the legend container and creates legend items for Receiver and Sender.
+    /// Clears the legend container and creates legend items using localized text.
     /// </summary>
-    public void CreateLegend()
+    public async Task CreateLegend()
     {
         if (legendContainer == null)
         {
             Debug.LogWarning("Legend Container is not assigned.");
             return;
         }
+
+        // Prevent duplicate creation
+        if (isLegendCreated)
+        {
+            return;
+        }
         
-        // Clear any existing items.
+        // Clear existing items
         foreach (Transform child in legendContainer)
         {
             Destroy(child.gameObject);
         }
         
-        // Ensure the legend container itself has a Horizontal Layout Group for tidy arrangement.
+        // Setup layout group
         HorizontalLayoutGroup containerHLG = legendContainer.GetComponent<HorizontalLayoutGroup>();
         if (containerHLG == null)
         {
@@ -47,15 +60,22 @@ public class LegendManager : MonoBehaviour
             containerHLG.spacing = spacing;
             containerHLG.childAlignment = TextAnchor.MiddleCenter;
         }
-        // Create a legend item for Sender (using red).
-        CreateLegendItem("Sender", Color.red);
-        // Create a legend item for Receiver (using blue).
-        CreateLegendItem("Receiver", Color.blue);
+
+        // Get localized strings
+        var senderTask = GetLocalizedStringAsync(UILocalizationTable, "sender_label");
+        var receiverTask = GetLocalizedStringAsync(UILocalizationTable, "receiver_label");
+        await Task.WhenAll(senderTask, receiverTask);
+
+        // Create legend items with localized text
+        CreateLegendItem(senderTask.Result, Color.red);
+        CreateLegendItem(receiverTask.Result, Color.blue);
+
+        isLegendCreated = true;
     }
     
     /// <summary>
     /// Creates a single legend item by instantiating the legend item prefab,
-    /// then modifying its Image and TMP_Text components.
+    /// then modifying its Image and RTLTextMeshPro components.
     /// </summary>
     /// <param name="labelText">The label text (e.g., "Receiver" or "Sender").</param>
     /// <param name="squareColor">The color to display in the square.</param>
@@ -75,9 +95,6 @@ public class LegendManager : MonoBehaviour
         Image img = legendItem.GetComponent<Image>();
         if (img != null)
         {
-            // If no sprite is assigned, assign the built-in UI sprite so the square is visible.
-            // if (img.sprite == null)
-            //     img.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
             img.color = squareColor;
             
             // Adjust its size.
@@ -88,12 +105,56 @@ public class LegendManager : MonoBehaviour
             }
         }
         
-        // Get the TMP_Text component (which should be a child of the prefab).
-        TMP_Text tmpText = legendItem.GetComponentInChildren<TMP_Text>();
-        if (tmpText != null)
+        // Get the TMP_Text component and replace it with RTLTextMeshPro
+        TMP_Text existingText = legendItem.GetComponentInChildren<TMP_Text>();
+        if (existingText != null)
         {
-            tmpText.text = labelText;
-            tmpText.fontSize = legendFontSize;
+            GameObject textGO = existingText.gameObject;
+            Destroy(existingText);
+            
+            RTLTextMeshPro rtlText = textGO.AddComponent<RTLTextMeshPro>();
+            rtlText.text = labelText;
+            rtlText.fontSize = legendFontSize;
+            
+            // Set the RTL font asset if provided
+            if (rtlFontAsset != null)
+            {
+                rtlText.font = rtlFontAsset;
+            }
         }
+    }
+
+    private bool ShouldUseRTL()
+    {
+        if (LocalizationSettings.SelectedLocale == null)
+            return false;
+
+        string languageCode = LocalizationSettings.SelectedLocale.Identifier.Code;
+        
+        // List of RTL language codes
+        string[] rtlLanguages = { "fa", "ar", "he", "ur", "ps", "sd" };
+        
+        return System.Array.Exists(rtlLanguages, lang => lang == languageCode);
+    }
+
+    private async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
+    {
+        var operation = LocalizationSettings.StringDatabase.GetLocalizedStringAsync(tableName, entryName);
+        await operation.Task;
+        if (operation.IsDone && operation.Result != null)
+        {
+            return operation.Result;
+        }
+        Debug.LogWarning($"Could not find localized string for key '{entryName}' in table '{tableName}'. Returning key.");
+        return entryName; // Fallback
+    }
+
+    /// <summary>
+    /// Refreshes the legend by recreating it. Call this after language changes.
+    /// </summary>
+    public async Task RefreshLegend()
+    {
+        isLegendCreated = false; // Reset the flag to allow recreation
+        await CreateLegend();
     }
 }

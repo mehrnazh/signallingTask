@@ -51,6 +51,7 @@ public class GameManager : MonoBehaviour {
     private TMP_Text optionBButtonText;
     private EventSystem eventSystem;
     private BarChartManager barChartManager;
+    private LegendManager legendManager;
 
     // Optimized data structures
     private List<TrialData> currentTrialList;
@@ -80,23 +81,43 @@ public class GameManager : MonoBehaviour {
     }
 
     IEnumerator InitializeLocalization() {
-        // Wait for the localization system to initialize
         yield return LocalizationSettings.InitializationOperation;
-        // Optionally set the initial language (e.g., Farsi)
-        //yield return SetLocale("fa"); // Use ISO code for Farsi
-        SetupUI(); // Call SetupUI after localization is ready
+        var setupTask = SetupUIAsync();
+        yield return new WaitUntil(() => setupTask.IsCompleted);
     }
 
     // Helper to set the locale
     IEnumerator SetLocale(string languageCode) {
         var locale = LocalizationSettings.AvailableLocales.GetLocale(languageCode);
         if (locale != null) {
-            LocalizationSettings.SelectedLocale = locale;
-            // Wait until the locale has changed and tables are loaded
-            yield return LocalizationSettings.InitializationOperation;
+            var currentLocale = LocalizationSettings.SelectedLocale;
+            if (currentLocale != locale)
+            {
+                LocalizationSettings.SelectedLocale = locale;
+                // Wait until the locale has changed and tables are loaded
+                yield return LocalizationSettings.InitializationOperation;
+                Debug.Log($"Locale changed to: {languageCode}");
+                // Refresh UI elements that depend on localization
+                StartCoroutine(RefreshLocalizedUICoroutine());
+            }
         } else {
             Debug.LogWarning($"Locale '{languageCode}' not found.");
         }
+    }
+
+    // Coroutine version of RefreshLocalizedUI
+    IEnumerator RefreshLocalizedUICoroutine()
+    {
+        // Refresh Legend
+        if (legendManager != null)
+        {
+            var legendTask = legendManager.RefreshLegend();
+            yield return new WaitUntil(() => legendTask.IsCompleted);
+        }
+
+        // Refresh other UI elements
+        var setupTask = SetupUIAsync();
+        yield return new WaitUntil(() => setupTask.IsCompleted);
     }
 
     private void InitializeComponents() {
@@ -107,9 +128,9 @@ public class GameManager : MonoBehaviour {
         optionBButtonText = optionBButton.GetComponentInChildren<TMP_Text>();
         eventSystem = EventSystem.current;
         barChartManager = FindObjectOfType<BarChartManager>();
+        legendManager = FindObjectOfType<LegendManager>();
 
         // Initialize UI state
-        //SetupUI(); // Moved to InitializeLocalization coroutine
         currentlySelectedButton = optionAButton;
         eventSystem.SetSelectedGameObject(currentlySelectedButton.gameObject);
     }
@@ -135,7 +156,7 @@ public class GameManager : MonoBehaviour {
         StartCoroutine(SetLocale("fa"));
     }
 
-    async void SetupUI() { // Make async to await string loading
+    async System.Threading.Tasks.Task SetupUIAsync() { // Renamed and made async
         instructionPanel.SetActive(true);
         trialPanel.SetActive(false);
         fixationPanel.SetActive(false);
@@ -145,11 +166,9 @@ public class GameManager : MonoBehaviour {
         if (interRunPanel != null) {
             interRunPanel.SetActive(false);
             if (interRunText != null)
-                // Use GetLocalizedStringAsync from the "UI" table
                 interRunText.text = await GetLocalizedStringAsync(UILocalizationTable, "inter_run_text");
         }
 
-        // Use GetLocalizedStringAsync from the "UI" table
         instructionText.text = await GetLocalizedStringAsync(UILocalizationTable, "welcome_text");
 
         SetButtonTransparency(optionAButtonImage, 0.5f);

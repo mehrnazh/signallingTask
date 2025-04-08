@@ -5,6 +5,7 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 using UnityEngine.Localization.Tables;
 using System.Threading.Tasks;
+using RTLTMPro;
 
 public class BarChartManager : MonoBehaviour
 {
@@ -22,6 +23,8 @@ public class BarChartManager : MonoBehaviour
     [Header("Group Labels (Outside)")]
     // Container for group labels; this should be positioned underneath the group containers.
     public RectTransform groupLabelsContainer;
+    // Font asset for RTL text
+    public TMP_FontAsset rtlFontAsset;
 
     [Header("Chart Settings")]
     // Maximum height in pixels corresponding to the highest monetary value.
@@ -41,8 +44,8 @@ public class BarChartManager : MonoBehaviour
         await Task.WhenAll(taskA, taskB);
 
         // Create or update group labels with localized text
-        TMP_Text groupALabel = GetOrCreateGroupLabelOutside("GroupALabel", taskA.Result);
-        TMP_Text groupBLabel = GetOrCreateGroupLabelOutside("GroupBLabel", taskB.Result);
+        RTLTextMeshPro groupALabel = GetOrCreateGroupLabelOutside("GroupALabel", taskA.Result);
+        RTLTextMeshPro groupBLabel = GetOrCreateGroupLabelOutside("GroupBLabel", taskB.Result);
 
         // Clear previous bars in the group containers.
         ClearChildren(groupAContainer);
@@ -63,27 +66,54 @@ public class BarChartManager : MonoBehaviour
 
     /// <summary>
     /// Searches for an existing label with the given name in GroupLabelsContainer.
-    /// If not found, creates a new TextMeshProUGUI element and adds it to the container.
+    /// If not found, creates a new RTLTextMeshPro element and adds it to the container.
     /// </summary>
-    private TMP_Text GetOrCreateGroupLabelOutside(string labelName, string defaultText)
+    private RTLTextMeshPro GetOrCreateGroupLabelOutside(string labelName, string defaultText)
     {
         Transform existingLabel = groupLabelsContainer.Find(labelName);
-        if(existingLabel != null)
+        RTLTextMeshPro textComp;
+        if (existingLabel != null)
         {
-            TMP_Text textComp = existingLabel.GetComponent<TMP_Text>();
-            if(textComp != null)
+            textComp = existingLabel.GetComponent<RTLTextMeshPro>();
+            if (textComp != null)
             {
                 textComp.text = defaultText;
                 return textComp;
             }
+            else
+            {
+                // If the GameObject exists but the component is missing, destroy and recreate
+                Destroy(existingLabel.gameObject);
+            }
         }
+        
         GameObject labelGO = new GameObject(labelName);
         labelGO.transform.SetParent(groupLabelsContainer, false);
-        TMP_Text newLabel = labelGO.AddComponent<TextMeshProUGUI>();
-        newLabel.text = defaultText;
-        newLabel.alignment = TextAlignmentOptions.Center;
-        newLabel.fontSize = 24;
-        return newLabel;
+        
+        textComp = labelGO.AddComponent<RTLTextMeshPro>();
+        textComp.text = defaultText;
+        textComp.alignment = TextAlignmentOptions.Center;
+        textComp.fontSize = 24;
+        
+        // Set the RTL font asset if provided
+        if (rtlFontAsset != null)
+        {
+            textComp.font = rtlFontAsset;
+        }
+        
+        // Add LayoutElement to ensure proper sizing within a potential layout group
+        LayoutElement layoutElement = labelGO.AddComponent<LayoutElement>();
+        layoutElement.preferredWidth = 200; // Adjust width as needed
+        
+        return textComp;
+    }
+
+    // Helper function to determine if RTL should be used
+    private bool ShouldUseRTL()
+    {
+        // Check if the selected locale's code is Farsi ('fa')
+        return LocalizationSettings.SelectedLocale != null && 
+               LocalizationSettings.SelectedLocale.Identifier.Code == "fa";
     }
 
     /// <summary>

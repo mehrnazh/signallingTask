@@ -96,7 +96,15 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 2088555873558528
-    m_Localized: '{0} dollars'
+    m_Localized: '{0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2094056095080448
+    m_Localized: Sender
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2094150705995776
+    m_Localized: Receiver
     m_Metadata:
       m_Items: []
   references:
