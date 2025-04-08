@@ -18,9 +18,9 @@ public class LegendManager : MonoBehaviour
     public TMP_FontAsset rtlFontAsset;
     
     // Legend visual parameters.
-    public int legendFontSize = 20;           // Font size for legend label text.
+    public int legendFontSize = 30;           // Font size for legend label text.
     public float squareSize = 20f;            // Width and height of the square.
-    public float spacing = 10f;               // Spacing between legend items.
+    public float spacing = 15f;               // Spacing between legend items.
 
     // Localization table reference
     private const string UILocalizationTable = "UI";
@@ -105,14 +105,22 @@ public class LegendManager : MonoBehaviour
             }
         }
         
-        // Get the TMP_Text component and replace it with RTLTextMeshPro
-        TMP_Text existingText = legendItem.GetComponentInChildren<TMP_Text>();
-        if (existingText != null)
+        // Get the text component (either TMP_Text or RTLTextMeshPro)
+        RTLTextMeshPro rtlText = legendItem.GetComponentInChildren<RTLTextMeshPro>();
+        if (rtlText == null)
         {
-            GameObject textGO = existingText.gameObject;
-            Destroy(existingText);
-            
-            RTLTextMeshPro rtlText = textGO.AddComponent<RTLTextMeshPro>();
+            // If no RTLTextMeshPro exists, try to get TMP_Text and convert it
+            TMP_Text existingText = legendItem.GetComponentInChildren<TMP_Text>();
+            if (existingText != null)
+            {
+                GameObject textGO = existingText.gameObject;
+                Destroy(existingText);
+                rtlText = textGO.AddComponent<RTLTextMeshPro>();
+            }
+        }
+
+        if (rtlText != null)
+        {
             rtlText.text = labelText;
             rtlText.fontSize = legendFontSize;
             
@@ -121,6 +129,10 @@ public class LegendManager : MonoBehaviour
             {
                 rtlText.font = rtlFontAsset;
             }
+        }
+        else
+        {
+            Debug.LogWarning("No text component found in legend item prefab!");
         }
     }
 
