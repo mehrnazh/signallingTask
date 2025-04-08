@@ -19,7 +19,64 @@ MonoBehaviour:
     m_Items: []
   m_TableData:
   - m_Id: 899303858176
-    m_Localized: Welcome to the experiment. Press any key to begin.....
+    m_Localized: 'Welcome to the experiment.
+
+
+      In each trial, you will see
+      two monetary allocation options with corresponding messages.
+
+      Press any
+      key to begin.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059188342611968
+    m_Localized: 'Please take a short break...
+
+
+      Meanwhile we will match you
+      with another counterpart'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059268051165184
+    m_Localized: Trial {0} of {1}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059376683638784
+    m_Localized: 'To Receiver:
+
+      Option A will earn you more money
+
+      than
+      Option B'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059436133703680
+    m_Localized: 'To Receiver:
+
+      Option B will earn you more money
+
+      than
+      Option A'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059498180042752
+    m_Localized: 'To Receiver:
+
+      I would prefer you to choose Option A'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059571274178560
+    m_Localized: 'To Receiver:
+
+      I would prefer you to choose Option B'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059617948393472
+    m_Localized: 'Task complete.
+
+
+      One trial from each task will be randomly
+      selected for payment.\nThank you for participating.'
     m_Metadata:
       m_Items: []
   references:

@@ -16,7 +16,35 @@ MonoBehaviour:
   m_TableCollectionNameGuidString: ecd6bd4ff7805704b9b62313de28679e
   m_Entries:
   - m_Id: 899303858176
-    m_Key: welcome
+    m_Key: welcome_text
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059188342611968
+    m_Key: inter_run_text
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059268051165184
+    m_Key: trial_info
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059376683638784
+    m_Key: deception_option_a
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059436133703680
+    m_Key: deception_option_b
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059498180042752
+    m_Key: control_option_a
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059571274178560
+    m_Key: control_option_b
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2059617948393472
+    m_Key: end_experiment_text
     m_Metadata:
       m_Items: []
   m_Metadata:

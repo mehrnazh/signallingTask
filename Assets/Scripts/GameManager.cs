@@ -4,6 +4,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
+using UnityEngine.Localization.Tables;
 
 // Enum to distinguish between task types.
 public enum TaskType { Deception, Control }
@@ -62,12 +65,37 @@ public class GameManager : MonoBehaviour {
     private float decisionStartTime;
     private Button currentlySelectedButton;
 
+    // Localization table reference
+    private const string UILocalizationTable = "UI"; // Your table name
+
     void Awake() {
         if (Instance == null) {
             Instance = this;
             InitializeComponents();
         } else {
             Destroy(gameObject);
+        }
+        // Ensure Localization is initialized before using it
+        StartCoroutine(InitializeLocalization());
+    }
+
+    IEnumerator InitializeLocalization() {
+        // Wait for the localization system to initialize
+        yield return LocalizationSettings.InitializationOperation;
+        // Optionally set the initial language (e.g., Farsi)
+        //yield return SetLocale("fa"); // Use ISO code for Farsi
+        SetupUI(); // Call SetupUI after localization is ready
+    }
+
+    // Helper to set the locale
+    IEnumerator SetLocale(string languageCode) {
+        var locale = LocalizationSettings.AvailableLocales.GetLocale(languageCode);
+        if (locale != null) {
+            LocalizationSettings.SelectedLocale = locale;
+            // Wait until the locale has changed and tables are loaded
+            yield return LocalizationSettings.InitializationOperation;
+        } else {
+            Debug.LogWarning($"Locale '{languageCode}' not found.");
         }
     }
 
@@ -81,7 +109,7 @@ public class GameManager : MonoBehaviour {
         barChartManager = FindObjectOfType<BarChartManager>();
 
         // Initialize UI state
-        SetupUI();
+        //SetupUI(); // Moved to InitializeLocalization coroutine
         currentlySelectedButton = optionAButton;
         eventSystem.SetSelectedGameObject(currentlySelectedButton.gameObject);
     }
@@ -102,9 +130,12 @@ public class GameManager : MonoBehaviour {
         DataLogger.Initialize();
         LoadAndShuffleTrials();
         InsertAttentionTests();
+
+        // Set the language (e.g., Farsi) - ensure "fa" is a locale you've set up
+        StartCoroutine(SetLocale("fa"));
     }
 
-    void SetupUI() {
+    async void SetupUI() { // Make async to await string loading
         instructionPanel.SetActive(true);
         trialPanel.SetActive(false);
         fixationPanel.SetActive(false);
@@ -114,12 +145,13 @@ public class GameManager : MonoBehaviour {
         if (interRunPanel != null) {
             interRunPanel.SetActive(false);
             if (interRunText != null)
-                interRunText.text = "Please take a short break...\n\nmeanwhile we will match you with another counterpart";
+                // Use GetLocalizedStringAsync from the "UI" table
+                interRunText.text = await GetLocalizedStringAsync(UILocalizationTable, "inter_run_text");
         }
 
-        instructionText.text = "Welcome to the experiment.\n\n" +
-                               "In each trial, you will see two monetary allocation options with corresponding messages.\n" +
-                               "Press any key to begin.";
+        // Use GetLocalizedStringAsync from the "UI" table
+        instructionText.text = await GetLocalizedStringAsync(UILocalizationTable, "welcome_text");
+
         SetButtonTransparency(optionAButtonImage, 0.5f);
         SetButtonTransparency(optionBButtonImage, 0.5f);
     }
@@ -151,7 +183,7 @@ public class GameManager : MonoBehaviour {
                     yield return StartCoroutine(RunTrial(currentTrialList[adjustedIndex], eventIndex + 1));
                 }
             }
-            
+
             if (run < totalRuns - 1 && interRunPanel != null) {
                 interRunPanel.SetActive(true);
                 yield return new WaitForSeconds(interRunInterval);
@@ -175,20 +207,27 @@ public class GameManager : MonoBehaviour {
     IEnumerator RunTrial(TrialData trial, int trialNumber) {
         selectionEnabled = false;
         trialPanel.SetActive(true);
-        trialInfoText.text = $"Trial {trialNumber} of {totalTrials + attentionTests.Count}";
+
+        // Format the localized string with parameters
+        var task = GetLocalizedStringAsync(UILocalizationTable, "trial_info");
+        yield return new WaitUntil(() => task.IsCompleted);
+        string trialInfoFormat = task.Result;
+        trialInfoText.text = string.Format(trialInfoFormat, trialNumber, totalTrials + attentionTests.Count);
 
         if (barChartManager != null) {
             barChartManager.CreateBarChart(trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other);
         }
 
-        // Set button text immediately
-        if (currentTask == TaskType.Deception) {
-            SetButtonText(optionAButtonText, "To Receiver:\nOption A will earn you more money\nthan Option B");
-            SetButtonText(optionBButtonText, "To Receiver:\nOption B will earn you more money\nthan Option A");
-        } else {
-            SetButtonText(optionAButtonText, "To Receiver:\nI would prefer you to choose Option A");
-            SetButtonText(optionBButtonText, "To Receiver:\nI would prefer you to choose Option B");
-        }
+        // Set button text immediately using localized strings
+        string optionAKey = (currentTask == TaskType.Deception) ? "deception_option_a" : "control_option_a";
+        string optionBKey = (currentTask == TaskType.Deception) ? "deception_option_b" : "control_option_b";
+        
+        var taskA = GetLocalizedStringAsync(UILocalizationTable, optionAKey);
+        var taskB = GetLocalizedStringAsync(UILocalizationTable, optionBKey);
+        yield return new WaitUntil(() => taskA.IsCompleted && taskB.IsCompleted);
+        
+        SetButtonText(optionAButtonText, taskA.Result);
+        SetButtonText(optionBButtonText, taskB.Result);
 
         // Set buttons to unresponsive and transparent state
         SetButtonTransparency(optionAButtonImage, 0.5f);
@@ -216,20 +255,24 @@ public class GameManager : MonoBehaviour {
     IEnumerator RunAttentionTest(AttentionTestData test, int eventNumber) {
         selectionEnabled = false;
         trialPanel.SetActive(true);
-        trialInfoText.text = $"Trial {eventNumber} of {totalTrials + attentionTests.Count}";
+
+        // Format the localized string with parameters
+        var task = GetLocalizedStringAsync(UILocalizationTable, "trial_info");
+        yield return new WaitUntil(() => task.IsCompleted);
+        string trialInfoFormat = task.Result;
+        trialInfoText.text = string.Format(trialInfoFormat, eventNumber, totalTrials + attentionTests.Count);
 
         if (barChartManager != null) {
             barChartManager.CreateBarChart(test.optionA_Self, test.optionA_Other, test.optionB_Self, test.optionB_Other);
         }
 
-        // Set button text immediately
-        if (currentTask == TaskType.Deception) {
-            SetButtonText(optionAButtonText, "\nOption A will earn me 10 $");
-            SetButtonText(optionBButtonText, "\nOption B will earn me 10 $");
-        } else {
-            SetButtonText(optionAButtonText, "\nOption A will earn me 10 $");
-            SetButtonText(optionBButtonText, "\nOption B will earn me 10 $");
-        }
+        // Set button text immediately using localized strings (using fixed keys for attention tests)
+        var taskA = GetLocalizedStringAsync(UILocalizationTable, "attention_option_a");
+        var taskB = GetLocalizedStringAsync(UILocalizationTable, "attention_option_b");
+        yield return new WaitUntil(() => taskA.IsCompleted && taskB.IsCompleted);
+        
+        SetButtonText(optionAButtonText, taskA.Result);
+        SetButtonText(optionBButtonText, taskB.Result);
 
         // Set buttons to unresponsive and transparent state
         SetButtonTransparency(optionAButtonImage, 0.5f);
@@ -274,7 +317,7 @@ public class GameManager : MonoBehaviour {
 
     void OnDecisionMade(string choice) {
         if (!selectionEnabled) return;
-        
+
         decisionMade = true;
         trialResponses.Add(choice);
 
@@ -305,7 +348,7 @@ public class GameManager : MonoBehaviour {
         }
     }
 
-    void EndExperiment() {
+    async void EndExperiment() { // Make async
         int randomNumber = Random.Range(1000, 9999);
         string filename = $"TrialData_{randomNumber}.csv";
         DataLogger.SaveData(filename);
@@ -313,7 +356,8 @@ public class GameManager : MonoBehaviour {
         if (instructionPanel != null)
             instructionPanel.SetActive(true);
         if (instructionText != null)
-            instructionText.text = "Task complete.\n\nOne trial from each task will be randomly selected for payment.\nThank you for participating.";
+            // Use GetLocalizedStringAsync from the "UI" table
+            instructionText.text = await GetLocalizedStringAsync(UILocalizationTable, "end_experiment_text");
 
         if (endExperimentButton != null) {
             Destroy(endExperimentButton.gameObject);
@@ -364,7 +408,7 @@ public class GameManager : MonoBehaviour {
     // Inserts the attention tests into the overall event sequence.
     private void InsertAttentionTests() {
         CreateAttentionTests();
-        
+
         // Clear previous indices
         attentionTestIndices.Clear();
         attentionTestIndexToTestIndex.Clear();
@@ -397,5 +441,17 @@ public class GameManager : MonoBehaviour {
         attentionTests.Add(new AttentionTestData(5f, 5f, 10f, 10f, "B"));
         // Example attention test 5 - Option A is clearly better for receiver.
         attentionTests.Add(new AttentionTestData(5f, 10f, 10f, 5f, "B"));
+    }
+
+    // Helper method to get localized string asynchronously
+    async System.Threading.Tasks.Task<string> GetLocalizedStringAsync(string tableName, string entryName) {
+        var operation = LocalizationSettings.StringDatabase.GetLocalizedStringAsync(tableName, entryName);
+        await operation.Task; // Wait for the operation to complete
+        if (operation.IsDone && operation.Result != null) {
+            return operation.Result;
+        } else {
+            Debug.LogWarning($"Could not find localized string for key '{entryName}' in table '{tableName}'. Returning key.");
+            return entryName; // Fallback
+        }
     }
 }
