@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.EventSystems; // Required for keyboard navigation
+using UnityEngine.EventSystems;
 
+// Enum to distinguish between task types.
 public enum TaskType { Deception, Control }
 
 public class GameManager : MonoBehaviour {
@@ -14,70 +15,93 @@ public class GameManager : MonoBehaviour {
     public GameObject instructionPanel;
     public GameObject trialPanel;
     public GameObject fixationPanel;
-    public GameObject feedbackPanel; // Optional: Additional visual feedback
-    public GameObject interRunPanel; // Inter-run Panel
+    public GameObject feedbackPanel;       // Optional: for additional visual feedback
+    public GameObject interRunPanel;       // Inter-run panel for breaks
     public InstructionManager instructionManager;
 
     [Header("UI Texts")]
     public TMP_Text instructionText;
     public TMP_Text trialInfoText;
-    public TMP_Text interRunText; // Text for the Inter-run Panel
+    public TMP_Text interRunText;
 
     [Header("Buttons")]
     public Button optionAButton;
     public Button optionBButton;
-    public Button endExperimentButton; // End-of-experiment button
+    public Button endExperimentButton;
 
     [Header("Task Settings")]
-    public TaskType currentTask = TaskType.Deception; // Can be set dynamically
-    public int totalTrials = 45;                 // Total number of trials
-    public int trialsPerRun = 9;                 // Trials in each run
-    public float trialOnsetDuration = 2f;          // Trial onset duration
-    public float decisionConfirmationMin = 2f;    // Minimum confirmation time
-    public float decisionConfirmationMax = 4f;    // Maximum confirmation time
-    public float fixationMin = 2f;               // Minimum fixation duration
-    public float fixationMax = 4f;               // Maximum fixation duration
-    public float interRunInterval = 10f;          // Inter-run interval
-    public float closeDelay = 10f; // Time in seconds before closing the application
+    public TaskType currentTask = TaskType.Deception;
+    public int totalTrials = 45;  // Total number of regular trials (without attention tests)
+    public int trialsPerRun = 9;
+    public float trialOnsetDuration = 2f;
+    public float decisionConfirmationMin = 2f;
+    public float decisionConfirmationMax = 4f;
+    public float fixationMin = 2f;
+    public float fixationMax = 4f;
+    public float interRunInterval = 10f;
+    public float closeDelay = 10f;
 
-    private List<TrialData> currentTrialList;     // List to hold the current trial data
-    private List<string> trialResponses = new List<string>();  // Participant's trial responses
-    private List<float> responseTimes = new List<float>();     // List to store reaction times
+    // Cached components
+    private Image optionAButtonImage;
+    private Image optionBButtonImage;
+    private TMP_Text optionAButtonText;
+    private TMP_Text optionBButtonText;
+    private EventSystem eventSystem;
+    private BarChartManager barChartManager;
 
-    private int currentTrialIndex = 0;
+    // Optimized data structures
+    private List<TrialData> currentTrialList;
+    private List<string> trialResponses = new List<string>();
+    private List<float> responseTimes = new List<float>();
+    private List<AttentionTestData> attentionTests = new List<AttentionTestData>();
+    private HashSet<int> attentionTestIndices = new HashSet<int>();
+    private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>();
+
     private bool decisionMade = false;
-    private bool selectionEnabled = false;        // Disable selection during trial onset phase
+    private bool selectionEnabled = false;
     private float decisionStartTime;
-
-    private Button currentlySelectedButton;       // Track the currently selected button
+    private Button currentlySelectedButton;
 
     void Awake() {
         if (Instance == null) {
             Instance = this;
+            InitializeComponents();
         } else {
-            Destroy(gameObject); // Ensure only one GameManager instance exists
+            Destroy(gameObject);
         }
     }
 
-    void Start() {
-        // Show instruction panel first
-        instructionPanel.SetActive(true);
+    private void InitializeComponents() {
+        // Cache frequently accessed components
+        optionAButtonImage = optionAButton.GetComponent<Image>();
+        optionBButtonImage = optionBButton.GetComponent<Image>();
+        optionAButtonText = optionAButton.GetComponentInChildren<TMP_Text>();
+        optionBButtonText = optionBButton.GetComponentInChildren<TMP_Text>();
+        eventSystem = EventSystem.current;
+        barChartManager = FindObjectOfType<BarChartManager>();
 
-        // Hide all other panels initially
+        // Initialize UI state
+        SetupUI();
+        currentlySelectedButton = optionAButton;
+        eventSystem.SetSelectedGameObject(currentlySelectedButton.gameObject);
+    }
+
+    private void LoadAndShuffleTrials() {
+        currentTrialList = new List<TrialData>(TrialDataManager.DeceptionTrials);
+        ShuffleTrials(currentTrialList);
+    }
+
+    void Start() {
+        // Show the instruction panel and hide other panels
+        instructionPanel.SetActive(true);
         trialPanel.SetActive(false);
         fixationPanel.SetActive(false);
         feedbackPanel.SetActive(false);
         interRunPanel.SetActive(false);
-    
-        DataLogger.Initialize(); // Initialize DataLogger
 
-        currentTrialList = new List<TrialData>(TrialDataManager.DeceptionTrials); // Load trial data
-        ShuffleTrials(currentTrialList); // Optional: Shuffle trial order
-
-        // SetupUI(); // Set up initial UI states
-        
-        // currentlySelectedButton = optionAButton; // Default selected button for keyboard navigation
-        // EventSystem.current.SetSelectedGameObject(currentlySelectedButton.gameObject);
+        DataLogger.Initialize();
+        LoadAndShuffleTrials();
+        InsertAttentionTests();
     }
 
     void SetupUI() {
@@ -85,21 +109,19 @@ public class GameManager : MonoBehaviour {
         trialPanel.SetActive(false);
         fixationPanel.SetActive(false);
         feedbackPanel.SetActive(false);
-        if (endExperimentButton != null) endExperimentButton.gameObject.SetActive(false);
+        if (endExperimentButton != null)
+            endExperimentButton.gameObject.SetActive(false);
         if (interRunPanel != null) {
             interRunPanel.SetActive(false);
-            if (interRunText != null) interRunText.text = "Please take a short break...\n\n" + "meanwhile we will match you with another counterpart";
+            if (interRunText != null)
+                interRunText.text = "Please take a short break...\n\nmeanwhile we will match you with another counterpart";
         }
-
-        // optionAButton.GetComponentInChildren<TMP_Text>().text = "message loading";
-        // optionBButton.GetComponentInChildren<TMP_Text>().text = "message loading";
 
         instructionText.text = "Welcome to the experiment.\n\n" +
                                "In each trial, you will see two monetary allocation options with corresponding messages.\n" +
                                "Press any key to begin.";
-        
-        SetButtonTransparency(optionAButton, 0.5f); // Set initial transparency for onset phase
-        SetButtonTransparency(optionBButton, 0.5f); 
+        SetButtonTransparency(optionAButtonImage, 0.5f);
+        SetButtonTransparency(optionBButtonImage, 0.5f);
     }
 
     void Update() {
@@ -107,220 +129,273 @@ public class GameManager : MonoBehaviour {
             instructionPanel.SetActive(false);
             StartCoroutine(RunAllTrials());
         }
-
-        HandleKeyboardNavigation(); // Handle keyboard navigation during decision phase
+        HandleKeyboardNavigation();
     }
 
-   IEnumerator RunAllTrials() {
-        // Wait until instructions are complete
+    IEnumerator RunAllTrials() {
         yield return new WaitUntil(() => instructionManager.instructionsComplete);
-    
-       int totalRuns = totalTrials / trialsPerRun;
 
-       for (int run = 0; run < totalRuns; run++) {
-           for (int trialInRun = 0; trialInRun < trialsPerRun; trialInRun++) {
-               currentTrialIndex = run * trialsPerRun + trialInRun;
+        int totalEvents = totalTrials + attentionTests.Count;
+        int totalRuns = Mathf.CeilToInt((float)totalEvents / trialsPerRun);
 
-               if (currentTrialIndex < totalTrials) {
-                   yield return StartCoroutine(RunTrial(currentTrialList[currentTrialIndex], currentTrialIndex + 1));
-               }
-           }
+        for (int run = 0; run < totalRuns; run++) {
+            for (int trialInRun = 0; trialInRun < trialsPerRun; trialInRun++) {
+                int eventIndex = run * trialsPerRun + trialInRun;
+                if (eventIndex >= totalEvents) break;
 
-           if (run < totalRuns - 1 && interRunPanel != null) {
-               interRunPanel.SetActive(true);
-               yield return new WaitForSeconds(interRunInterval);
-               interRunPanel.SetActive(false);
-           }
-       }
-
-       EndTrials();
-   }
-
-   IEnumerator RunTrial(TrialData trial, int trialNumber) {
-       selectionEnabled = false; // Disable selection during onset phase
-
-       trialPanel.SetActive(true);
-
-       BarChartManager chartManager = FindObjectOfType<BarChartManager>();
-       if (chartManager != null) {
-           chartManager.CreateBarChart(trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other);
-       } else {
-           Debug.LogWarning("BarChartManager not found in scene!");
-       }
-
-       SetButtonTransparency(optionAButton, 0.5f); // Reduce transparency for onset phase
-       SetButtonTransparency(optionBButton, 0.5f);
-
-       yield return new WaitForSeconds(trialOnsetDuration); // Show onset screen for specified duration
-    
-        // --- Decision Phase ---
-        // Set button texts based on the current task
-        if (optionAButton != null && optionBButton != null) {
-            if (currentTask == TaskType.Deception) {
-                SetButtonText(optionAButton, "To Receiver:\n" + "Option A will earn you more money \nthan Option B");
-                SetButtonText(optionBButton, "To Receiver:\n" + "Option B will earn you more money \nthan Option A");
-            } else {
-                SetButtonText(optionAButton, "To Receiver:\n" + "I would prefer you to choose Option A");
-                SetButtonText(optionBButton, "To Receiver:\n" + "I would prefer you to choose Option B");
+                if (attentionTestIndices.Contains(eventIndex)) {
+                    int testIndex = attentionTestIndexToTestIndex[eventIndex];
+                    yield return StartCoroutine(RunAttentionTest(attentionTests[testIndex], eventIndex + 1));
+                } else {
+                    int adjustedIndex = GetAdjustedTrialIndex(eventIndex);
+                    yield return StartCoroutine(RunTrial(currentTrialList[adjustedIndex], eventIndex + 1));
+                }
+            }
+            
+            if (run < totalRuns - 1 && interRunPanel != null) {
+                interRunPanel.SetActive(true);
+                yield return new WaitForSeconds(interRunInterval);
+                interRunPanel.SetActive(false);
             }
         }
-       selectionEnabled = true; // Enable selection after onset phase
+        EndTrials();
+    }
 
-    //    optionAButton.GetComponentInChildren<TMP_Text>().text =
-    //        "To Receiver:\n\n" + "Option A will earn you\n more money than Option B";
+    // Calculates the index offset caused by inserted attention tests.
+    private int GetAdjustedTrialIndex(int currentIndex) {
+        int adjustment = 0;
+        foreach (int testIndex in attentionTestIndices) {
+            if (currentIndex >= testIndex) {
+                adjustment++;
+            }
+        }
+        return currentIndex - adjustment;
+    }
+
+    IEnumerator RunTrial(TrialData trial, int trialNumber) {
+        selectionEnabled = false;
+        trialPanel.SetActive(true);
+        trialInfoText.text = $"Trial {trialNumber} of {totalTrials + attentionTests.Count}";
+
+        if (barChartManager != null) {
+            barChartManager.CreateBarChart(trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other);
+        }
+
+        // Set button text immediately
+        if (currentTask == TaskType.Deception) {
+            SetButtonText(optionAButtonText, "To Receiver:\nOption A will earn you more money\nthan Option B");
+            SetButtonText(optionBButtonText, "To Receiver:\nOption B will earn you more money\nthan Option A");
+        } else {
+            SetButtonText(optionAButtonText, "To Receiver:\nI would prefer you to choose Option A");
+            SetButtonText(optionBButtonText, "To Receiver:\nI would prefer you to choose Option B");
+        }
+
+        // Set buttons to unresponsive and transparent state
+        SetButtonTransparency(optionAButtonImage, 0.5f);
+        SetButtonTransparency(optionBButtonImage, 0.5f);
+
+        // Wait for onset duration
+        yield return new WaitForSeconds(trialOnsetDuration);
+
+        // Make buttons responsive and fully visible
+        SetupTrialButtons();
+        yield return new WaitUntil(() => decisionMade);
+
+        float responseTime = Time.time - decisionStartTime;
+        string messageChosen = trialResponses.Count > 0 ? trialResponses[trialResponses.Count - 1] : "None";
+        DataLogger.LogTrial(trialNumber, currentTask.ToString(), messageChosen, responseTime);
+
+        yield return new WaitForSeconds(Random.Range(decisionConfirmationMin, decisionConfirmationMax));
+
+        trialPanel.SetActive(false);
+        fixationPanel.SetActive(true);
+        yield return new WaitForSeconds(Random.Range(fixationMin, fixationMax));
+        fixationPanel.SetActive(false);
+    }
+
+    IEnumerator RunAttentionTest(AttentionTestData test, int eventNumber) {
+        selectionEnabled = false;
+        trialPanel.SetActive(true);
+        trialInfoText.text = $"Trial {eventNumber} of {totalTrials + attentionTests.Count}";
+
+        if (barChartManager != null) {
+            barChartManager.CreateBarChart(test.optionA_Self, test.optionA_Other, test.optionB_Self, test.optionB_Other);
+        }
+
+        // Set button text immediately
+        if (currentTask == TaskType.Deception) {
+            SetButtonText(optionAButtonText, "\nOption A will earn me 10 $");
+            SetButtonText(optionBButtonText, "\nOption B will earn me 10 $");
+        } else {
+            SetButtonText(optionAButtonText, "\nOption A will earn me 10 $");
+            SetButtonText(optionBButtonText, "\nOption B will earn me 10 $");
+        }
+
+        // Set buttons to unresponsive and transparent state
+        SetButtonTransparency(optionAButtonImage, 0.5f);
+        SetButtonTransparency(optionBButtonImage, 0.5f);
+
+        // Wait for onset duration
+        yield return new WaitForSeconds(trialOnsetDuration);
+
+        // Make buttons responsive and fully visible
+        SetupTrialButtons();
+        yield return new WaitUntil(() => decisionMade);
+
+        float responseTime = Time.time - decisionStartTime;
+        string response = trialResponses.Count > 0 ? trialResponses[trialResponses.Count - 1] : "None";
+        DataLogger.LogTrial(eventNumber, "AttentionTest", response, responseTime);
+
+        yield return new WaitForSeconds(Random.Range(decisionConfirmationMin, decisionConfirmationMax));
+
+        trialPanel.SetActive(false);
+        fixationPanel.SetActive(true);
+        yield return new WaitForSeconds(Random.Range(fixationMin, fixationMax));
+        fixationPanel.SetActive(false);
+    }
+
+    private void SetupTrialButtons() {
+        selectionEnabled = true;
+        SetButtonHighlight(optionAButtonImage, Color.green);
+        SetButtonHighlight(optionBButtonImage, Color.green);
+        SetButtonTransparency(optionAButtonImage, 1f);
+        SetButtonTransparency(optionBButtonImage, 1f);
+
+        decisionMade = false;
+        decisionStartTime = Time.time;
+
+        optionAButton.onClick.RemoveAllListeners();
+        optionBButton.onClick.RemoveAllListeners();
+        optionAButton.onClick.AddListener(() => OnDecisionMade("A"));
+        optionBButton.onClick.AddListener(() => OnDecisionMade("B"));
+
+        eventSystem.SetSelectedGameObject(optionAButton.gameObject);
+    }
+
+    void OnDecisionMade(string choice) {
+        if (!selectionEnabled) return;
         
-    //    optionBButton.GetComponentInChildren<TMP_Text>().text =
-    //        "To Receiver:\n\n" + "Option A will earn you\n more money than Option B";
+        decisionMade = true;
+        trialResponses.Add(choice);
 
-       SetButtonHighlight(optionAButton, Color.green);
-       SetButtonHighlight(optionBButton, Color.green);
+        SetButtonHighlight(optionAButtonImage, Color.clear);
+        SetButtonHighlight(optionBButtonImage, Color.clear);
+        SetButtonHighlight(choice == "A" ? optionAButtonImage : optionBButtonImage, Color.red);
+    }
 
-       SetButtonTransparency(optionAButton, 1f); // Restore full transparency after onset phase
-       SetButtonTransparency(optionBButton, 1f);
+    // Handles keyboard navigation during decision phases.
+    void HandleKeyboardNavigation() {
+        if (!selectionEnabled || eventSystem.currentSelectedGameObject == null)
+            return;
 
-       decisionMade = false;
-       decisionStartTime = Time.time;
+        if (Input.GetKeyDown(KeyCode.RightArrow)) {
+            eventSystem.SetSelectedGameObject(optionBButton.gameObject);
+            optionBButton.onClick.Invoke();
+        } else if (Input.GetKeyDown(KeyCode.LeftArrow)) {
+            eventSystem.SetSelectedGameObject(optionAButton.gameObject);
+            optionAButton.onClick.Invoke();
+        }
+    }
 
-       optionAButton.onClick.RemoveAllListeners();
-       optionBButton.onClick.RemoveAllListeners();
-        
-       optionAButton.onClick.AddListener(() => OnDecisionMade("A"));
-       optionBButton.onClick.AddListener(() => OnDecisionMade("B"));
-
-       EventSystem.current.SetSelectedGameObject(optionAButton.gameObject); // Default selection for keyboard navigation
-
-       yield return new WaitUntil(() => decisionMade);
-
-       float responseTime = Time.time - decisionStartTime;
-        
-       string messageChosen = trialResponses.Count > 0 ? trialResponses[trialResponses.Count - 1] : "None";
-
-       DataLogger.LogTrial(trialNumber, currentTask.ToString(), messageChosen, responseTime);
-
-       yield return new WaitForSeconds(Random.Range(decisionConfirmationMin, decisionConfirmationMax));
-
-       trialPanel.SetActive(false);
-        
-       yield return new WaitForSeconds(Random.Range(fixationMin, fixationMax));
-        
-       fixationPanel.SetActive(false);
-   }
-
-   void HandleKeyboardNavigation() {
-      if (!selectionEnabled || EventSystem.current.currentSelectedGameObject == null)
-          return;
-
-      if (Input.GetKeyDown(KeyCode.RightArrow)) {
-          EventSystem.current.SetSelectedGameObject(optionBButton.gameObject);
-          optionBButton.onClick.Invoke(); 
-      } else if (Input.GetKeyDown(KeyCode.LeftArrow)) {
-          EventSystem.current.SetSelectedGameObject(optionAButton.gameObject);
-          optionAButton.onClick.Invoke(); 
-      }
-   }
-
-   void OnDecisionMade(string choice) {
-      decisionMade = true;
-
-      trialResponses.Add(choice);
-
-      SetButtonHighlight(optionAButton, Color.clear);
-      SetButtonHighlight(optionBButton, Color.clear);
-
-      if (choice == "A") SetButtonHighlight(optionAButton, Color.red);
-      else SetButtonHighlight(optionBButton, Color.red);
-   }
-
-   void EndTrials() { 
-      if (endExperimentButton != null) {
+    void EndTrials() {
+        if (endExperimentButton != null) {
             endExperimentButton.gameObject.SetActive(true);
             endExperimentButton.onClick.RemoveAllListeners();
             endExperimentButton.onClick.AddListener(EndExperiment);
         }
-   } 
+    }
 
-   void EndExperiment() {
-        // Generate a unique filename using a random number
+    void EndExperiment() {
         int randomNumber = Random.Range(1000, 9999);
-        string filename = "TrialData_" + randomNumber + ".csv";
+        string filename = $"TrialData_{randomNumber}.csv";
         DataLogger.SaveData(filename);
-        
-        if (instructionPanel != null) instructionPanel.SetActive(true);
-        if (instructionText != null) {
-            instructionText.text = "Task complete.\n\n" +
-                                   "One trial from each task will be randomly selected for payment.\n" +
-                                   "Thank you for participating.";
-        }
+
+        if (instructionPanel != null)
+            instructionPanel.SetActive(true);
+        if (instructionText != null)
+            instructionText.text = "Task complete.\n\nOne trial from each task will be randomly selected for payment.\nThank you for participating.";
 
         if (endExperimentButton != null) {
             Destroy(endExperimentButton.gameObject);
-            Debug.Log("End Experiment Button has been removed. Game Over");
+            Debug.Log("End Experiment Button removed. Game Over");
         }
 
-        // Close the application after a delay
         Invoke("CloseApplication", closeDelay);
-
-        // Set the time scale
         Time.timeScale = 0;
     }
 
-           // Close Application function
-    void CloseApplication()
-    {
+    void CloseApplication() {
 #if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false; // Stop playing in the editor
+        UnityEditor.EditorApplication.isPlaying = false;
 #else
-        Application.Quit(); // Quit the application
+        Application.Quit();
 #endif
     }
 
-    // // Called when a decision is made.
-    // void OnDecisionMade(string choice) {
-    //     if (decisionMade) return; // Prevent multiple responses
-    //     decisionMade = true;
+    // Sets the displayed text on a button.
+    void SetButtonText(TMP_Text buttonText, string text) {
+        if (buttonText != null) buttonText.text = text;
+    }
 
-    //     trialResponses.Add(choice); // Record the choice.
-    //     if (optionAButton != null && optionBButton != null) {
-    //         if (choice == "A") {
-    //             SetButtonHighlight(optionAButton, Color.red);
-    //             SetButtonHighlight(optionBButton, Color.clear); // Remove highlight from the other option.
-    //         } else if (choice == "B") {
-    //             SetButtonHighlight(optionBButton, Color.red);
-    //             SetButtonHighlight(optionAButton, Color.clear);
-    //         }
-    //     }
-    // }
+    // Sets the highlight color of a button.
+    void SetButtonHighlight(Image buttonImage, Color color) {
+        if (buttonImage != null) buttonImage.color = color;
+    }
 
-
-//    void EndExperiment() { 
-//       DataLogger.SaveData("TrialData.csv"); 
-//       Application.Quit(); 
-//    } 
-
-    // Set the TMP Text on the button
-    void SetButtonText(Button button, string text) {
-        if (button != null && button.GetComponentInChildren<TMP_Text>() != null) {
-            button.GetComponentInChildren<TMP_Text>().text = text;
+    // Sets the transparency (alpha) of a button's image.
+    void SetButtonTransparency(Image buttonImage, float alpha) {
+        if (buttonImage != null) {
+            Color color = buttonImage.color;
+            color.a = alpha;
+            buttonImage.color = color;
         }
     }
-    
-   void SetButtonHighlight(Button btn, Color color) { 
-      Image img = btn.GetComponent<Image>(); 
-      img.color = color; 
-   } 
 
-   void SetButtonTransparency(Button btn, float alpha) { 
-      Image img = btn.GetComponent<Image>(); 
-      if (img != null) { 
-          Color color = img.color; 
-          color.a = alpha; 
-          img.color = color; 
-      } 
-   } 
+    // Randomly shuffles the list of regular trials.
+    void ShuffleTrials(List<TrialData> trials) {
+        for (int i = trials.Count - 1; i > 0; i--) {
+            int j = Random.Range(0, i + 1);
+            TrialData temp = trials[i];
+            trials[i] = trials[j];
+            trials[j] = temp;
+        }
+    }
 
-   void ShuffleTrials(List<TrialData> trials) { 
-      for (int i=trials.Count-1;i>0;i--) { 
-          int j=Random.Range(0,i+1); 
-          TrialData temp=trials[i]; 
-          trials[i]=trials[j]; 
-          trials[j]=temp;} }}
+    // Inserts the attention tests into the overall event sequence.
+    private void InsertAttentionTests() {
+        CreateAttentionTests();
+        
+        // Clear previous indices
+        attentionTestIndices.Clear();
+        attentionTestIndexToTestIndex.Clear();
+
+        // Start placing attention tests after the first few trials
+        int currentPosition = Random.Range(4, 8); // Start between 4-7 trials
+        int testCount = 0;
+
+        while (currentPosition < totalTrials && testCount < attentionTests.Count) {
+            // Add the attention test at this position
+            attentionTestIndices.Add(currentPosition);
+            attentionTestIndexToTestIndex[currentPosition] = testCount;
+            testCount++;
+
+            // Move to next position (4-7 trials ahead)
+            currentPosition += Random.Range(4, 8);
+        }
+    }
+
+    // Creates 5 attention tests with predetermined correct answers.
+    private void CreateAttentionTests() {
+        attentionTests.Clear();
+        // Example attention test 1 - Option A is clearly better for self.
+        attentionTests.Add(new AttentionTestData(10f, 5f, 5f, 5f, "A"));
+        // Example attention test 2 - Option B is clearly better for self.
+        attentionTests.Add(new AttentionTestData(5f, 5f, 10f, 5f, "B"));
+        // Example attention test 3 - Option A is clearly better for both.
+        attentionTests.Add(new AttentionTestData(10f, 10f, 5f, 5f, "A"));
+        // Example attention test 4 - Option B is clearly better for both.
+        attentionTests.Add(new AttentionTestData(5f, 5f, 10f, 10f, "B"));
+        // Example attention test 5 - Option A is clearly better for receiver.
+        attentionTests.Add(new AttentionTestData(5f, 10f, 10f, 5f, "B"));
+    }
+}

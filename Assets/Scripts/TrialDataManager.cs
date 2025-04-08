@@ -18,6 +18,17 @@ public class TrialData {
     }
 }
 
+[System.Serializable]
+public class AttentionTestData : TrialData {
+    public string correctAnswer; // "A" or "B"
+    
+    public AttentionTestData(float aSelf, float aOther, float bSelf, float bOther, string correct) 
+        : base(aSelf, aOther, bSelf, bOther) {
+        correctAnswer = correct;
+    }
+}
+
+
 public class TrialDataManager : MonoBehaviour {
     // Two static lists are prepared so that the same monetary allocations are available for both conditions.
     public static List<TrialData> DeceptionTrials = new List<TrialData>();
