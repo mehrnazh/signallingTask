@@ -79,6 +79,26 @@ MonoBehaviour:
       selected for payment.\nThank you for participating.'
     m_Metadata:
       m_Items: []
+  - m_Id: 2073209707945984
+    m_Localized: Option A will earn me 10 dollars.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2073223725309952
+    m_Localized: Option B will earn me 10 dollars.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2088179745153024
+    m_Localized: Option A
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2088461111648256
+    m_Localized: Option B
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2088555873558528
+    m_Localized: '{0} dollars'
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

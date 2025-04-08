@@ -47,6 +47,26 @@ MonoBehaviour:
     m_Key: end_experiment_text
     m_Metadata:
       m_Items: []
+  - m_Id: 2073209707945984
+    m_Key: attention_option_a
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2073223725309952
+    m_Key: attention_option_b
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2088179745153024
+    m_Key: option_a_label
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2088461111648256
+    m_Key: option_b_label
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2088555873558528
+    m_Key: currency_format
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

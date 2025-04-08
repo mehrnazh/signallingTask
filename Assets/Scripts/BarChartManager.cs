@@ -1,6 +1,10 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
+using UnityEngine.Localization.Tables;
+using System.Threading.Tasks;
 
 public class BarChartManager : MonoBehaviour
 {
@@ -23,19 +27,22 @@ public class BarChartManager : MonoBehaviour
     // Maximum height in pixels corresponding to the highest monetary value.
     public float chartMaxHeight = 300f; 
 
-    // [Header("Legend")]
-    // // Container where the legend will be dynamically created.
-    // public RectTransform legendContainer;
+    // Localization table reference
+    private const string UILocalizationTable = "UI";
 
     /// <summary>
-    /// Generates the bar chart using trial monetary allocations. It creates bars in the two group containers,
-    /// dynamically generates group labels (placed outside, underneath the groups), and creates a legend.
+    /// Generates the bar chart using trial monetary allocations with localized text.
     /// </summary>
-    public void CreateBarChart(float optionASelf, float optionAOther, float optionBSelf, float optionBOther)
+    public async void CreateBarChart(float optionASelf, float optionAOther, float optionBSelf, float optionBOther)
     {
-        // Create or update group labels in the external GroupLabelsContainer.
-        TMP_Text groupALabel = GetOrCreateGroupLabelOutside("GroupALabel", "Option A");
-        TMP_Text groupBLabel = GetOrCreateGroupLabelOutside("GroupBLabel", "Option B");
+        // Get localized strings for group labels
+        var taskA = GetLocalizedStringAsync(UILocalizationTable, "option_a_label");
+        var taskB = GetLocalizedStringAsync(UILocalizationTable, "option_b_label");
+        await Task.WhenAll(taskA, taskB);
+
+        // Create or update group labels with localized text
+        TMP_Text groupALabel = GetOrCreateGroupLabelOutside("GroupALabel", taskA.Result);
+        TMP_Text groupBLabel = GetOrCreateGroupLabelOutside("GroupBLabel", taskB.Result);
 
         // Clear previous bars in the group containers.
         ClearChildren(groupAContainer);
@@ -52,9 +59,6 @@ public class BarChartManager : MonoBehaviour
         // Create bars for Option B.
         CreateBar(groupBContainer, optionBSelf, scaleFactor, Color.red);
         CreateBar(groupBContainer, optionBOther, scaleFactor, Color.blue);
-
-        // Create or update the legend.
-        // CreateLegend();
     }
 
     /// <summary>
@@ -110,7 +114,8 @@ public class BarChartManager : MonoBehaviour
         TMP_Text barLabel = newBar.GetComponentInChildren<TMP_Text>();
         if(barLabel != null)
         {
-            barLabel.text = value.ToString();
+            // Format the value with the appropriate currency symbol and format
+            barLabel.text = FormatValue(value);
             RectTransform labelRect = barLabel.GetComponent<RectTransform>();
             labelRect.anchorMin = new Vector2(0.5f, 0f);
             labelRect.anchorMax = new Vector2(0.5f, 0f);
@@ -118,6 +123,28 @@ public class BarChartManager : MonoBehaviour
             float margin = 5f;
             labelRect.anchoredPosition = new Vector2(0f, barHeight + margin);
         }
+    }
+
+    private string FormatValue(float value)
+    {
+        // Get the localized currency format
+        var formatTask = GetLocalizedStringAsync(UILocalizationTable, "currency_format");
+        formatTask.Wait(); // Wait for the task to complete
+        string format = formatTask.Result;
+        
+        // Format the value according to the localized format
+        return string.Format(format, value);
+    }
+
+    private async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
+    {
+        var operation = LocalizationSettings.StringDatabase.GetLocalizedStringAsync(tableName, entryName);
+        await operation.Task;
+        if (operation.IsDone && operation.Result != null)
+        {
+            return operation.Result;
+        }
+        return entryName; // Fallback to the entry name if localization fails
     }
 
     // /// <summary>
