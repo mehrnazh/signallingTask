@@ -636,7 +636,9 @@ public class GameManager : MonoBehaviour {
         Debug.Log($"RunTrial {eventNumber}: Decision Made. Choice: {messageChosen}, RT: {responseTime:F3}s");
 
         // First, log the basic trial data
-        DataLogger.LogTrial(eventNumber, currentTask.ToString(), messageChosen, responseTime);
+        // Create the list of bar data from the trial object
+        List<float> barData = new List<float> { trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other };
+        DataLogger.LogTrial(eventNumber, currentTask.ToString(), messageChosen, responseTime, barData); // Pass the barData list
         // Then log additional data about the options if needed (this depends on your DataLogger implementation)
         // You might need to create a new method in DataLogger to log the additional parameters
 
@@ -716,7 +718,7 @@ public class GameManager : MonoBehaviour {
         Debug.Log($"RunAttentionTest {eventNumber}: Decision Made. Choice: {response}, Correct: {correct}, RT: {responseTime:F3}s");
 
         // Log the attention test data
-        DataLogger.LogAttentionTest(eventNumber, response, responseTime, correct);
+        DataLogger.LogAttentionTest(eventNumber, response, responseTime); // Removed 'correct' argument
 
         // --- Phase 3: Confirmation ---
         float confirmationDuration = Random.Range(decisionConfirmationMin, decisionConfirmationMax);

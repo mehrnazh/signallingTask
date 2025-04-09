@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using System.Linq; // Added for LINQ's string.Join
 
 public static class DataLogger
 {
@@ -9,37 +10,35 @@ public static class DataLogger
     // This method is run once at the beginning to add a header.
     public static void Initialize()
     {
-        // CSV header: Added columns for attention test data and Participant ID
+        // CSV header: Removed IsAttentionTest, CorrectAttentionResponse. Added BarData.
         csvLines.Clear();
-        // Added: IsAttentionTest, CorrectAttentionResponse, ParticipantID
         // Let's put ParticipantID first for easy identification
-        csvLines.Add("ParticipantID,EventNumber,TaskTypeOrEvent,MessageChosenOrResponse,ReactionTime,IsAttentionTest,CorrectAttentionResponse");
+        csvLines.Add("ParticipantID,EventNumber,TaskTypeOrEvent,MessageChosenOrResponse,ReactionTime,BarData"); // Updated header
     }
     
     // Call this method to log a regular trial.
-    public static void LogTrial(int eventNumber, string taskType, string messageChosen, float reactionTime)
+    // Added barData parameter, removed boolean flags
+    public static void LogTrial(int eventNumber, string taskType, string messageChosen, float reactionTime, List<float> barData) 
     {
         // Create a CSV line from the given parameters
-        // Need GameManager to access the ID
         string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID"; // Get ID
-        string line = string.Format("{0},{1},{2},{3},{4:F4},{5},{6}", 
+        string barDataString = barData != null ? string.Join(";", barData.Select(b => b.ToString("F2"))) : "N/A"; // Format bar data list
+        string line = string.Format("{0},{1},{2},{3},{4:F4},{5}", 
                                     participantId, eventNumber, taskType, messageChosen, reactionTime, 
-                                    false, // IsAttentionTest = false
-                                    "N/A" // CorrectAttentionResponse = N/A for regular trials
+                                    barDataString // Added bar data
                                    );
         csvLines.Add(line);
     }
 
     // Call this method to log an attention test.
-    public static void LogAttentionTest(int eventNumber, string response, float reactionTime, bool correct)
+    // Removed boolean flags
+    public static void LogAttentionTest(int eventNumber, string response, float reactionTime) 
     {
         // Create a CSV line for attention test parameters
-        // Need GameManager to access the ID
         string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID"; // Get ID
-        string line = string.Format("{0},{1},{2},{3},{4:F4},{5},{6}",
+        string line = string.Format("{0},{1},{2},{3},{4:F4},{5}",
                                     participantId, eventNumber, "AttentionTest", response, reactionTime,
-                                    true, // IsAttentionTest = true
-                                    correct // CorrectAttentionResponse = true/false
+                                    "N/A" // BarData is N/A for attention tests
                                    );
         csvLines.Add(line);
     }
