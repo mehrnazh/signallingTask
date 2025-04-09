@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 3153587206956331587}
   - component: {fileID: 5713220007708336820}
   - component: {fileID: 6516509365947880080}
+  - component: {fileID: 1441402040904178012}
   m_Layer: 5
   m_Name: BarLabel
   m_TagString: Untagged
@@ -66,7 +67,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_text: 
-  m_isRightToLeft: 0
+  m_isRightToLeft: 1
   m_fontAsset: {fileID: 11400000, guid: a5bc811904166894f8bf8260d269bec7, type: 2}
   m_sharedMaterial: {fileID: 8190657639954274631, guid: a5bc811904166894f8bf8260d269bec7, type: 2}
   m_fontSharedMaterials: []
@@ -92,8 +93,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 40
+  m_fontSizeBase: 40
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -138,7 +139,19 @@ MonoBehaviour:
   farsi: 1
   originalText: 
   fixTags: 1
-  forceFix: 0
+  forceFix: 1
+--- !u!210 &1441402040904178012
+SortingGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3042879160521244139}
+  m_Enabled: 1
+  m_SortingLayerID: -574509553
+  m_SortingLayer: 2
+  m_SortingOrder: 1
+  m_SortAtRoot: 0
 --- !u!1 &5184193648074537862
 GameObject:
   m_ObjectHideFlags: 0
@@ -150,6 +163,7 @@ GameObject:
   - component: {fileID: 1297787269024959021}
   - component: {fileID: 7268061918088482136}
   - component: {fileID: 460924455465986586}
+  - component: {fileID: 3935037997516702258}
   m_Layer: 5
   m_Name: BarPrefab
   m_TagString: Untagged
@@ -215,3 +229,15 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!210 &3935037997516702258
+SortingGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5184193648074537862}
+  m_Enabled: 1
+  m_SortingLayerID: -1301046633
+  m_SortingLayer: 1
+  m_SortingOrder: 0
+  m_SortAtRoot: 0

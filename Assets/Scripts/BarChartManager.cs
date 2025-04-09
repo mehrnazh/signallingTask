@@ -6,6 +6,7 @@ using UnityEngine.Localization.Settings;
 using UnityEngine.Localization.Tables;
 using System.Threading.Tasks;
 using RTLTMPro;
+using System.Globalization;
 
 public class BarChartManager : MonoBehaviour
 {
@@ -144,6 +145,21 @@ public class BarChartManager : MonoBehaviour
         TMP_Text barLabel = newBar.GetComponentInChildren<TMP_Text>();
         if(barLabel != null)
         {
+            // Ensure the label text renders on top
+            Canvas labelCanvas = barLabel.gameObject.GetComponent<Canvas>();
+            if (labelCanvas == null)
+            {
+                labelCanvas = barLabel.gameObject.AddComponent<Canvas>();
+            }
+            labelCanvas.overrideSorting = true;
+            labelCanvas.sortingOrder = 1; // Ensure this is higher than the bar's canvas/default
+
+            // Add GraphicRaycaster if needed for interactions (optional, but good practice)
+            if (barLabel.gameObject.GetComponent<GraphicRaycaster>() == null)
+            {
+                barLabel.gameObject.AddComponent<GraphicRaycaster>();
+            }
+
             // Format the value with the appropriate currency symbol and format
             barLabel.text = FormatValue(value);
             RectTransform labelRect = barLabel.GetComponent<RectTransform>();
@@ -157,13 +173,27 @@ public class BarChartManager : MonoBehaviour
 
     private string FormatValue(float value)
     {
-        // Get the localized currency format
-        var formatTask = GetLocalizedStringAsync(UILocalizationTable, "currency_format");
-        formatTask.Wait(); // Wait for the task to complete
-        string format = formatTask.Result;
-        
-        // Format the value according to the localized format
-        return string.Format(format, value);
+        if (ShouldUseRTL())
+        {
+            // Format number using fa-IR culture with General ("G") specifier
+            string formattedNumber = value.ToString("G", new CultureInfo("fa-IR"));
+            string ltrNumber = "\u200E" + formattedNumber;
+            // Get the currency symbol/unit separately for Farsi
+            var symbolTask = GetLocalizedStringAsync(UILocalizationTable, "currency_symbol"); 
+            symbolTask.Wait(); // TODO: Consider async/await pattern here too
+            string currencySymbol = symbolTask.Result;
+
+            // Combine number and symbol (adjust spacing as needed for Farsi)
+            return ltrNumber;// + " " + currencySymbol; 
+        }
+        else
+        {
+            // For other languages, use the combined currency_format string
+            var formatTask = GetLocalizedStringAsync(UILocalizationTable, "currency_format");
+            formatTask.Wait(); 
+            string format = formatTask.Result;
+            return string.Format(format, value);
+        }
     }
 
     private async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
@@ -176,121 +206,4 @@ public class BarChartManager : MonoBehaviour
         }
         return entryName; // Fallback to the entry name if localization fails
     }
-
-    // /// <summary>
-    // /// Dynamically creates a legend guide with two items:
-    // /// - A blue circle labeled "Receiver"
-    // /// - A red circle labeled "Sender"
-    // /// </summary>
-
-
-    // private void CreateLegend(Transform legendContainer, string legendName, Color legendColor)
-    // {
-    //     GameObject newRec = Instantiate(legendPrefab, legendContainer, false);
-    //     sendRec.transform.localPosition = Vector3.zero;
-    //     RectTransform legendRec = newRec.GetComponent<RectTransform>();
-    //     float 
-    // }
-    // private void CreateLegend()
-    // {
-    //     if (legendContainer == null)
-    //         return;
-            
-    //     // Clear any existing legend items.
-    //     foreach (Transform child in legendContainer)
-    //         Destroy(child.gameObject);
-        
-    //     // Ensure the legendContainer has a Horizontal Layout Group.
-    //     HorizontalLayoutGroup containerHLG = legendContainer.GetComponent<HorizontalLayoutGroup>();
-    //     if (containerHLG == null)
-    //     {
-    //         containerHLG = legendContainer.gameObject.AddComponent<HorizontalLayoutGroup>();
-    //         containerHLG.childForceExpandWidth = false;
-    //         containerHLG.childForceExpandHeight = false;
-    //         containerHLG.spacing = 20;
-    //         containerHLG.childAlignment = TextAnchor.MiddleCenter;
-    //     }
-        
-    //     // ***********************
-    //     // Create legend item for Receiver.
-    //     // ***********************
-    //     GameObject recLegendItem = new GameObject("ReceiverLegend");
-    //     recLegendItem.transform.SetParent(legendContainer, false);
-    //     HorizontalLayoutGroup recHLG = recLegendItem.AddComponent<HorizontalLayoutGroup>();
-    //     recHLG.childForceExpandWidth = false;
-    //     recHLG.childForceExpandHeight = false;
-    //     recHLG.childAlignment = TextAnchor.MiddleLeft;
-    //     recHLG.spacing = 5;
-
-
-    //     GameObject sendRec = Instantiate(legendPrefab, legendContainer, false);
-    //     sendRec
-        
-    //     // Instantiate your bar prefab as the colored square for the Receiver.
-    //     GameObject recSquare = Instantiate(barPrefab, recLegendItem.transform, false);
-    //     recSquare.name = "ReceiverSquare";
-    //     // Reset its local position to ensure proper placement.
-    //     recSquare.transform.localPosition = Vector3.zero;
-    //     // Retrieve and adjust the RectTransform for a small size.
-    //     RectTransform recSquareRT = recSquare.GetComponent<RectTransform>();
-    //     recSquareRT.sizeDelta = new Vector2(20, 20);
-    //     // Retrieve the Image component from the prefab and set its color to blue.
-    //     Image recImage = recSquare.GetComponent<Image>();
-    //     if (recImage != null)
-    //     {
-    //         // If there is no sprite, assign Unity's built-in sprite.
-    //         if(recImage.sprite == null)
-    //             recImage.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
-            
-    //         recImage.color = Color.blue;
-    //     }
-    //     // Disable any internal label from the prefab since it's not needed.
-    //     TMP_Text recPrefabLabel = recSquare.GetComponentInChildren<TMP_Text>();
-    //     if (recPrefabLabel != null)
-    //     {
-    //         recPrefabLabel.gameObject.SetActive(false);
-    //     }
-        
-    //     // Create a text object for the Receiver legend.
-    //     GameObject recTextGO = new GameObject("ReceiverText");
-    //     recTextGO.transform.SetParent(recLegendItem.transform, false);
-    //     TMP_Text recText = recTextGO.AddComponent<TextMeshProUGUI>();
-    //     recText.text = "Receiver";
-    //     recText.fontSize = 20;
-        
-    //     // ***********************
-    //     // Create legend item for Sender.
-    //     // ***********************
-    //     GameObject sendLegendItem = new GameObject("SenderLegend");
-    //     sendLegendItem.transform.SetParent(legendContainer, false);
-    //     HorizontalLayoutGroup sendHLG = sendLegendItem.AddComponent<HorizontalLayoutGroup>();
-    //     sendHLG.childForceExpandWidth = false;
-    //     sendHLG.childForceExpandHeight = false;
-    //     sendHLG.childAlignment = TextAnchor.MiddleLeft;
-    //     sendHLG.spacing = 5;
-        
-    //     // Instantiate your bar prefab as the colored square for the Sender.
-    //     GameObject sendSquare = Instantiate(barPrefab, sendLegendItem.transform, false);
-    //     sendSquare.name = "SenderSquare";
-    //     sendSquare.transform.localPosition = Vector3.zero;
-    //     RectTransform sendSquareRT = sendSquare.GetComponent<RectTransform>();
-    //     sendSquareRT.sizeDelta = new Vector2(20, 20);
-    //     Image sendImage = sendSquare.GetComponent<Image>();
-    //     if (sendImage != null)
-    //     {
-    //         sendImage.color = Color.red; // Change this color as desired.
-    //     }
-    //     TMP_Text sendPrefabLabel = sendSquare.GetComponentInChildren<TMP_Text>();
-    //     if (sendPrefabLabel != null)
-    //     {
-    //         sendPrefabLabel.gameObject.SetActive(false);
-    //     }
-        
-    //     // Create the text object for the Sender legend.
-    //     GameObject sendTextGO = new GameObject("SenderText");
-    //     sendTextGO.transform.SetParent(sendLegendItem.transform, false);
-    //     TMP_Text sendText = sendTextGO.AddComponent<TextMeshProUGUI>();
-    //     sendText.text = "Sender";
-    //     sendText.fontSize = 20;
-    // }
 }

@@ -9,16 +9,34 @@ public static class DataLogger
     // This method is run once at the beginning to add a header.
     public static void Initialize()
     {
-        // CSV header: you can include additional fields if needed (e.g., participant ID, timestamp)
+        // CSV header: Added columns for attention test data
         csvLines.Clear();
-        csvLines.Add("Trial,TaskType,MessageChosen,ReactionTime");
+        // Added: IsAttentionTest, CorrectAttentionResponse
+        csvLines.Add("EventNumber,TaskTypeOrEvent,MessageChosenOrResponse,ReactionTime,IsAttentionTest,CorrectAttentionResponse");
     }
     
-    // Call this method to log a trial.
-    public static void LogTrial(int trialNumber, string taskType, string messageChosen, float reactionTime)
+    // Call this method to log a regular trial.
+    public static void LogTrial(int eventNumber, string taskType, string messageChosen, float reactionTime)
     {
         // Create a CSV line from the given parameters
-        string line = string.Format("{0},{1},{2},{3}", trialNumber, taskType, messageChosen, reactionTime);
+        // Added placeholders for attention test columns
+        string line = string.Format("{0},{1},{2},{3:F4},{4},{5}", 
+                                    eventNumber, taskType, messageChosen, reactionTime, 
+                                    false, // IsAttentionTest = false
+                                    "N/A" // CorrectAttentionResponse = N/A for regular trials
+                                   );
+        csvLines.Add(line);
+    }
+
+    // Call this method to log an attention test.
+    public static void LogAttentionTest(int eventNumber, string response, float reactionTime, bool correct)
+    {
+        // Create a CSV line for attention test parameters
+        string line = string.Format("{0},{1},{2},{3:F4},{4},{5}",
+                                    eventNumber, "AttentionTest", response, reactionTime,
+                                    true, // IsAttentionTest = true
+                                    correct // CorrectAttentionResponse = true/false
+                                   );
         csvLines.Add(line);
     }
     
@@ -27,7 +45,15 @@ public static class DataLogger
     {
         // Use Unity's persistent data path so that the file is saved in a predictable location.
         string filePath = Path.Combine(Application.persistentDataPath, filename);
-        File.WriteAllLines(filePath, csvLines.ToArray());
-        Debug.Log("Data saved to: " + filePath);
+        try 
+        {
+            File.WriteAllLines(filePath, csvLines.ToArray());
+            Debug.Log("Data saved successfully to: " + filePath);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Error saving data to {filePath}: {ex.Message}");
+        }
+        
     }
 }
