@@ -71,6 +71,7 @@ public class GameManager : MonoBehaviour {
     // Flag to ensure GameManager setup (including localization AND data loading) is complete
     private bool isInitialized = false;
     private bool isDataLoaded = false; // New flag specifically for data loading
+    private bool hasReceivedOptions = false; // New flag: Ensures options are set before init
 
     // Localization table reference
     private const string UILocalizationTable = "UI"; // Your table name
@@ -81,22 +82,50 @@ public class GameManager : MonoBehaviour {
             Instance = this;
             DontDestroyOnLoad(gameObject); // Optional: Keep GameManager across scene loads if needed
             InitializeComponents(); // Cache components early, but *don't* load trials yet
+            // *** Do NOT start InitializeLocalizationAndUI here anymore ***
+            // StartCoroutine(InitializeLocalizationAndUI());
+             Debug.Log("GameManager Awake: Singleton set. Waiting for options from SetupManager.");
         } else {
             Debug.LogWarning($"Duplicate GameManager instance detected on GameObject '{gameObject.name}'. Destroying this one.", gameObject); // Log which object is destroyed
             Destroy(gameObject);
             return; // Exit Awake if duplicate
         }
-
-        // Start the initialization coroutine AFTER singleton pattern ensures this is the instance
-        StartCoroutine(InitializeLocalizationAndUI());
     }
 
-    // Combined Initialization Coroutine
-    IEnumerator InitializeLocalizationAndUI() {
-        Debug.Log("InitializeLocalizationAndUI: Starting.");
+    // *** NEW METHOD: Called by SetupManager ***
+    public void StartInitializationWithOptions(TaskType task, int series, string langCode)
+    {
+        if (hasReceivedOptions)
+        {
+            Debug.LogWarning("GameManager: StartInitializationWithOptions called more than once!");
+            return;
+        }
+
+        Debug.Log($"GameManager: Received options - Task: {task}, Series: {series}, Lang: {langCode}");
+
+        // Store the selected options
+        this.currentTask = task;
+        this.currentSeries = series;
+        // Language code will be passed directly to the init coroutine
+
+        hasReceivedOptions = true;
+
+        // NOW start the main initialization process with the chosen language
+        StartCoroutine(InitializeLocalizationAndUI(langCode));
+    }
+
+    // Combined Initialization Coroutine - Now accepts language code
+    IEnumerator InitializeLocalizationAndUI(string initialLangCode) {
+        Debug.Log($"InitializeLocalizationAndUI: Starting with Language Code: {initialLangCode}");
+
+        // Ensure options were set (safety check)
+        if (!hasReceivedOptions)
+        {
+            Debug.LogError("InitializeLocalizationAndUI started before options were received!");
+            yield break;
+        }
 
         // --- Start Data Loading Concurrently --- 
-        // Start loading data, but don't wait for it *yet*
         StartCoroutine(LoadDataSequentially());
 
         // 1. Wait for Localization to be ready
@@ -105,19 +134,21 @@ public class GameManager : MonoBehaviour {
              Debug.LogError("Localization failed to initialize!");
              yield break; // Stop coroutine
         }
-        Debug.Log("InitializeLocalizationAndUI: Localization Initialized.");
+        Debug.Log("InitializeLocalizationAndUI: Localization System Initialized.");
 
-        // 2. Set initial locale
-        yield return StartCoroutine(SetLocale("fa"));
+        // 2. Set initial locale using the provided code
+        Debug.Log($"InitializeLocalizationAndUI: Setting initial locale to {initialLangCode}...");
+        yield return StartCoroutine(SetLocale(initialLangCode)); // Use passed language code
 
-        // 3. Perform initial UI setup
-        instructionPanel.SetActive(true); // Show temporarily for potential IM setup
-        trialPanel.SetActive(false);
-        fixationPanel.SetActive(false);
-        feedbackPanel?.SetActive(false);
-        interRunPanel?.SetActive(false);
-        endExperimentButton?.gameObject.SetActive(false);
-        Debug.Log("InitializeLocalizationAndUI: Initial Panel States Set.");
+        // 3. Perform initial UI setup (panels are assumed to be correctly inactive except SetupPanel)
+        // GameManager might not need to explicitly set panel states here anymore if SetupManager ensures it.
+        // instructionPanel.SetActive(true); // Show temporarily for potential IM setup
+        // trialPanel.SetActive(false);
+        // fixationPanel.SetActive(false);
+        // feedbackPanel?.SetActive(false);
+        // interRunPanel?.SetActive(false);
+        // endExperimentButton?.gameObject.SetActive(false);
+        Debug.Log("InitializeLocalizationAndUI: Initial Panel States assumed correct.");
 
         // 4. Final Async UI Setup
          yield return SetupUIAsync();
@@ -132,33 +163,28 @@ public class GameManager : MonoBehaviour {
         isInitialized = true;
          Debug.Log("-----------------------------------------");
         Debug.Log("GameManager Core Initialized (including data).");
-        Debug.Log($"Task Type: {currentTask}, Series: {currentSeries}");
-        Debug.Log($"Locale: {LocalizationSettings.SelectedLocale?.Identifier.Code ?? "Not Set"}");
-        Debug.Log($"Total Regular Trials Loaded: {currentTrialList?.Count ?? 0}"); // Log actual count
-        Debug.Log($"Total Attention Tests Loaded: {attentionTests?.Count ?? 0}"); // Log actual count
+        Debug.Log($"Task Type: {currentTask}, Series: {currentSeries}"); // Now reflects user choice
+        Debug.Log($"Locale: {LocalizationSettings.SelectedLocale?.Identifier.Code ?? "Not Set"}"); // Reflects user choice
+        Debug.Log($"Total Regular Trials Loaded: {currentTrialList?.Count ?? 0}");
+        Debug.Log($"Total Attention Tests Loaded: {attentionTests?.Count ?? 0}");
         Debug.Log("-----------------------------------------");
 
         // 6. Initialize and Start Instructions via InstructionManager
         if (instructionManager != null) {
+            // Use the already set locale
             if (LocalizationSettings.SelectedLocale != null) {
                 string langCode = LocalizationSettings.SelectedLocale.Identifier.Code;
                 Debug.Log($"InitializeLocalizationAndUI: Initializing instructions via InstructionManager for Series: {currentSeries}, Task: {currentTask}, Lang: {langCode}");
 
-                // Explicitly activate the instruction manager's GameObject if it's not already
                 instructionManager.gameObject.SetActive(true);
-
-                // *** Initialize InstructionManager and pass 'this' GameManager instance ***
                 instructionManager.InitializeInstructions(currentSeries, currentTask, langCode, this);
-
-                // InstructionManager will handle showing its panel and calling StartGameInternal when done.
-                // Ensure the main instruction panel (if separate) is initially active for IM to use.
-                instructionPanel?.SetActive(true);
+                // Ensure the instruction panel (if separate) is active for IM to use.
+                 instructionPanel?.SetActive(true);
                 Debug.Log("InitializeLocalizationAndUI: Handed control to InstructionManager. Waiting for completion signal.");
 
             } else {
-                 Debug.LogError("InitializeLocalizationAndUI: SelectedLocale is null! Cannot determine language for instructions.");
-                 Debug.Log("InitializeLocalizationAndUI: Skipping instructions due to missing locale. Starting trials directly.");
-                 StartGameInternal(); // Skip instructions, start trials
+                 Debug.LogError("InitializeLocalizationAndUI: SelectedLocale became null after setting! Cannot init instructions.");
+                 StartGameInternal(); // Skip instructions
             }
         } else {
              Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions phase.");
