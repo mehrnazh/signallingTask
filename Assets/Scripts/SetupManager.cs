@@ -3,11 +3,13 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic; // Required for Dropdown options & Coroutine
+using System.IO; // For path character validation
 
 public class SetupManager : MonoBehaviour
 {
     [Header("UI References")]
     public GameObject setupPanelObject;
+    public TMP_InputField participantIdInputField;
     public TMP_Dropdown seriesDropdown;
     public TMP_Dropdown languageDropdown;
     public TMP_Dropdown taskTypeDropdown;
@@ -53,6 +55,13 @@ public class SetupManager : MonoBehaviour
         else
         {
             Debug.LogError("SetupManager: Start Button reference is missing!");
+        }
+
+        // Ensure Input Field reference is set
+        if (participantIdInputField == null)
+        {
+            Debug.LogError("SetupManager: Participant ID Input Field reference is missing!");
+            if (startButton) startButton.interactable = false; // Disable start if ID field missing
         }
 
         // Optional: Ensure other panels controlled by GameManager are initially off
@@ -104,11 +113,36 @@ public class SetupManager : MonoBehaviour
             }
         }
 
+        // *** Read Participant ID ***
+        string participantId = "PARTICIPANT_DEFAULT"; // Default ID
+        if (participantIdInputField != null)
+        {
+            participantId = participantIdInputField.text.Trim(); // Get text and remove leading/trailing whitespace
+            if (string.IsNullOrWhiteSpace(participantId))
+            {
+                participantId = "PARTICIPANT_EMPTY"; // Use specific default if empty
+                Debug.LogWarning("SetupManager: Participant ID field was empty. Using default.");
+            }
+            else
+            {
+                // Basic sanitization for filename safety (replace invalid chars)
+                foreach (char invalidChar in Path.GetInvalidFileNameChars())
+                {
+                    participantId = participantId.Replace(invalidChar.ToString(), "_");
+                }
+                participantId = participantId.Replace(" ", "_"); // Replace spaces too
+            }
+        }
+        else
+        {
+            Debug.LogError("SetupManager: Participant ID Input Field reference is missing! Using default ID.");
+        }
+
         Debug.Log("SetupManager: Start Button Clicked.");
         // Disable button to prevent double clicks
         if(startButton) startButton.interactable = false;
 
-        // --- Read selections --- 
+        // --- Read other selections --- 
         // (Adding null checks for safety)
         int selectedSeries = (seriesDropdown != null) ? seriesDropdown.value + 1 : 1; // Default to 1 if null
 
@@ -138,10 +172,10 @@ public class SetupManager : MonoBehaviour
          else { Debug.LogError("SetupManager: Task Type Dropdown missing, defaulting to Deception."); }
 
 
-        Debug.Log($"SetupManager: Selections - Series: {selectedSeries}, Language Code: {selectedLanguageCode}, Task Type: {selectedTaskType}");
+        Debug.Log($"SetupManager: Selections - ID: {participantId}, Series: {selectedSeries}, Language Code: {selectedLanguageCode}, Task Type: {selectedTaskType}");
 
-        // --- Pass selections to GameManager and start its initialization --- 
-        gameManager.StartInitializationWithOptions(selectedTaskType, selectedSeries, selectedLanguageCode);
+        // --- Pass selections (including ID) to GameManager and start its initialization --- 
+        gameManager.StartInitializationWithOptions(selectedTaskType, selectedSeries, selectedLanguageCode, participantId);
 
         // --- Hide the correct setup panel object --- 
         if (setupPanelObject != null)

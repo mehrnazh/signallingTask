@@ -73,6 +73,9 @@ public class GameManager : MonoBehaviour {
     private bool isDataLoaded = false; // New flag specifically for data loading
     private bool hasReceivedOptions = false; // New flag: Ensures options are set before init
 
+    // Store participant ID
+    private string participantId = "DEFAULT_ID"; // Default value
+
     // Localization table reference
     private const string UILocalizationTable = "UI"; // Your table name
 
@@ -93,7 +96,7 @@ public class GameManager : MonoBehaviour {
     }
 
     // *** NEW METHOD: Called by SetupManager ***
-    public void StartInitializationWithOptions(TaskType task, int series, string langCode)
+    public void StartInitializationWithOptions(TaskType task, int series, string langCode, string participantId)
     {
         if (hasReceivedOptions)
         {
@@ -101,12 +104,12 @@ public class GameManager : MonoBehaviour {
             return;
         }
 
-        Debug.Log($"GameManager: Received options - Task: {task}, Series: {series}, Lang: {langCode}");
+        Debug.Log($"GameManager: Received options - ID: {participantId}, Task: {task}, Series: {series}, Lang: {langCode}");
 
         // Store the selected options
         this.currentTask = task;
         this.currentSeries = series;
-        // Language code will be passed directly to the init coroutine
+        this.participantId = participantId; // Store the ID
 
         hasReceivedOptions = true;
 
@@ -163,6 +166,7 @@ public class GameManager : MonoBehaviour {
         isInitialized = true;
          Debug.Log("-----------------------------------------");
         Debug.Log("GameManager Core Initialized (including data).");
+        Debug.Log($"Participant ID: {this.participantId}"); // Log the ID
         Debug.Log($"Task Type: {currentTask}, Series: {currentSeries}"); // Now reflects user choice
         Debug.Log($"Locale: {LocalizationSettings.SelectedLocale?.Identifier.Code ?? "Not Set"}"); // Reflects user choice
         Debug.Log($"Total Regular Trials Loaded: {currentTrialList?.Count ?? 0}");
@@ -873,10 +877,10 @@ public class GameManager : MonoBehaviour {
              if (endButton != null) endButton.interactable = false;
          }
 
-         // --- 1. Save Data ---
-         string timestamp = System.DateTime.Now.ToString("yyyyMMddHHmmss");
-         int randomSuffix = Random.Range(1000, 9999);
-         string filename = $"TrialData_Task-{currentTask}_Series-{currentSeries}_{timestamp}_{randomSuffix}.csv";
+         // --- 1. Save Data --- 
+         string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss"); // Underscore for readability
+         // *** Use Participant ID in filename ***
+         string filename = $"PID-{participantId}_Task-{currentTask}_Series-{currentSeries}_{timestamp}.csv";
          DataLogger.SaveData(filename); // Assume SaveData handles logging internally
          Debug.Log($"EndExperiment: Data save requested to '{filename}'.");
 
@@ -914,9 +918,9 @@ public class GameManager : MonoBehaviour {
         instructionPanel?.SetActive(false);
 
         // Generate filename and save data
-        string timestamp = System.DateTime.Now.ToString("yyyyMMddHHmmss");
-        int randomSuffix = Random.Range(1000, 9999);
-        string filename = $"TrialData_Task-{currentTask}_Series-{currentSeries}_{timestamp}_{randomSuffix}_AutoEnd-{reason}.csv";
+        string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss"); // Underscore for readability
+        // *** Use Participant ID in filename ***
+        string filename = $"PID-{participantId}_Task-{currentTask}_Series-{currentSeries}_{timestamp}_AutoEnd-{reason}.csv";
         DataLogger.SaveData(filename);
         Debug.Log($"SaveAndQuitCoroutine: Data save requested to '{filename}'.");
 
@@ -1114,5 +1118,11 @@ public class GameManager : MonoBehaviour {
              return $"[{entryName}]";
          }
      }
+
+    // *** ADDED: Public getter for the participant ID ***
+    public string GetParticipantId()
+    {
+        return this.participantId;
+    }
 
 } // End of GameManager class
