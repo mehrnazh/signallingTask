@@ -80,11 +80,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 2073209707945984
-    m_Localized: Option A will earn me 10 dollars.
+    m_Localized: Option A will earn me 5 dollars.
     m_Metadata:
       m_Items: []
   - m_Id: 2073223725309952
-    m_Localized: Option B will earn me 10 dollars.
+    m_Localized: Option B will earn me 5 dollars.
     m_Metadata:
       m_Items: []
   - m_Id: 2088179745153024

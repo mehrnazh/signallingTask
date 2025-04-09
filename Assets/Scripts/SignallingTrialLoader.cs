@@ -100,11 +100,11 @@ namespace SignallingTaskData
         private void CreateAttentionTests()
         {
             AttentionTests.Clear();
-            AttentionTests.Add(new AttentionTestData(10f, 5f, 5f, 5f, "A"));
-            AttentionTests.Add(new AttentionTestData(5f, 5f, 10f, 5f, "B"));
-            AttentionTests.Add(new AttentionTestData(10f, 10f, 5f, 5f, "A"));
-            AttentionTests.Add(new AttentionTestData(5f, 5f, 10f, 10f, "B"));
-            AttentionTests.Add(new AttentionTestData(5f, 10f, 10f, 5f, "B"));
+            AttentionTests.Add(new AttentionTestData(10f, 5f, 5f, 5f, "B"));
+            AttentionTests.Add(new AttentionTestData(5f, 5f, 10f, 5f, "A"));
+            AttentionTests.Add(new AttentionTestData(10f, 10f, 5f, 5f, "B"));
+            AttentionTests.Add(new AttentionTestData(5f, 5f, 10f, 10f, "A"));
+            AttentionTests.Add(new AttentionTestData(5f, 10f, 10f, 5f, "A"));
             Debug.Log($"SignallingTrialLoader: Created {AttentionTests.Count} predefined attention tests.");
         }
     }
