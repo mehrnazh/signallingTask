@@ -17,6 +17,12 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: a65e1260fa890774981826cfc9f1c9c6
   m_SerializeEntries:
+  - m_GUID: 1317265bd367bf24c8c9252ba14c8797
+    m_Address: Assets/Samples/Localization/1.5.4/Smart Strings - Persistent Variables/String
+      Table/Gender Sample Shared Data.asset
+    m_ReadOnly: 1
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ecd6bd4ff7805704b9b62313de28679e
     m_Address: Assets/Localization/UI Shared Data.asset
     m_ReadOnly: 1

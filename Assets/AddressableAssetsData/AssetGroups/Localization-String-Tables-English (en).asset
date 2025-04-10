@@ -17,6 +17,12 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: 497b6b5c3d2861f4ca513b54ae8d24f7
   m_SerializeEntries:
+  - m_GUID: 9c045014c75799144b1716f552861afe
+    m_Address: Gender Sample_en
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c5c9bd94ec9e27a4db245a1d3570c9aa
     m_Address: UI_en
     m_ReadOnly: 1

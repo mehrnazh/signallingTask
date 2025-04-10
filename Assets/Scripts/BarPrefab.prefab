@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5713220007708336820}
   - component: {fileID: 6516509365947880080}
   - component: {fileID: 1441402040904178012}
+  - component: {fileID: 5810362625017518812}
   m_Layer: 5
   m_Name: BarLabel
   m_TagString: Untagged
@@ -45,7 +46,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3042879160521244139}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &6516509365947880080
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -136,9 +137,9 @@ MonoBehaviour:
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
   preserveNumbers: 0
-  farsi: 0
+  farsi: 1
   originalText: 
-  fixTags: 1
+  fixTags: 0
   forceFix: 1
 --- !u!210 &1441402040904178012
 SortingGroup:
@@ -152,6 +153,53 @@ SortingGroup:
   m_SortingLayer: 2
   m_SortingOrder: 1
   m_SortAtRoot: 0
+--- !u!114 &5810362625017518812
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3042879160521244139}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 56eb0353ae6e5124bb35b17aff880f16, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_StringReference:
+    m_TableReference:
+      m_TableCollectionName: GUID:ecd6bd4ff7805704b9b62313de28679e
+    m_TableEntryReference:
+      m_KeyId: 2088555873558528
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables:
+    - name: variable-1
+      variable:
+        rid: 4226361301635432457
+  m_FormatArguments: []
+  m_UpdateString:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 6516509365947880080}
+        m_TargetAssemblyTypeName: RTLTMPro.RTLTextMeshPro, RTLTMPro
+        m_MethodName: set_text
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+  references:
+    version: 2
+    RefIds:
+    - rid: 4226361301635432457
+      type: {class: FloatVariable, ns: UnityEngine.Localization.SmartFormat.PersistentVariables, asm: Unity.Localization}
+      data:
+        m_Value: 0
 --- !u!1 &5184193648074537862
 GameObject:
   m_ObjectHideFlags: 0

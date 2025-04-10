@@ -585,6 +585,11 @@ public class GameManager : MonoBehaviour {
         int totalEventCount = (currentTrialList?.Count ?? 0) + (attentionTests?.Count ?? 0);
 
         Debug.Log($"RunTrial {eventNumber}/{totalEventCount}: Start. Type: {currentTask}. A:[{trial.optionA_Self},{trial.optionA_Other}], B:[{trial.optionB_Self},{trial.optionB_Other}]");
+        
+        // *** NEW: Ensure both buttons are active at the very start of the onset phase ***
+        optionAButton?.gameObject.SetActive(true);
+        optionBButton?.gameObject.SetActive(true);
+
         // --- Phase 1: Onset ---
         selectionEnabled = false; // Disable input
         decisionMade = false;     // Reset decision flag
@@ -672,6 +677,11 @@ public class GameManager : MonoBehaviour {
     IEnumerator RunAttentionTest(SignallingTaskData.AttentionTestData test, int eventNumber) {
          int totalEventCount = (currentTrialList?.Count ?? 0) + (attentionTests?.Count ?? 0);
          Debug.Log($"RunAttentionTest {eventNumber}/{totalEventCount}: Start. Correct: {test.correctAnswer}. A:[{test.optionA_Self},{test.optionA_Other}], B:[{test.optionB_Self},{test.optionB_Other}]");
+        
+         // *** NEW: Ensure both buttons are active at the very start of the onset phase ***
+         optionAButton?.gameObject.SetActive(true);
+         optionBButton?.gameObject.SetActive(true);
+
         // --- Phase 1: Onset ---
         selectionEnabled = false;
         decisionMade = false;
@@ -761,6 +771,10 @@ public class GameManager : MonoBehaviour {
 
     // Configures buttons for the start of a decision phase.
     private void SetupTrialButtons() {
+        // 0. Ensure both buttons are active before setting interaction state
+        optionAButton?.gameObject.SetActive(true);
+        optionBButton?.gameObject.SetActive(true);
+
         // 1. Enable Interaction State
         selectionEnabled = true;    // Allow Update loop to process HandleKeyboardNavigation
         SetButtonInteraction(true); // Make buttons clickable and fully opaque
@@ -810,6 +824,14 @@ public class GameManager : MonoBehaviour {
         // Record the participant's response ("A" or "B")
         trialResponses.Add(choice);
         // Debug.Log($"OnDecisionMade: Choice '{choice}' recorded. Total responses: {trialResponses.Count}");
+
+
+        // *** NEW: Deactivate the unselected button ***
+        if (choice == "A") {
+            optionBButton?.gameObject.SetActive(false); // Hide Option B
+        } else if (choice == "B") {
+            optionAButton?.gameObject.SetActive(false); // Hide Option A
+        }
 
 
         // Optional: Provide immediate visual feedback for the selected button

@@ -132,7 +132,7 @@ public class BarChartManager : MonoBehaviour
     /// Instantiates a bar (from the prefab) into the specified parent container.
     /// Sets its height (using the scale factor and monetary value), color, and positions its internal label.
     /// </summary>
-    private void CreateBar(Transform parentContainer, float value, float scaleFactor, Color barColor)
+    private async Task CreateBar(Transform parentContainer, float value, float scaleFactor, Color barColor)
     {
         GameObject newBar = Instantiate(barPrefab, parentContainer, false);
         newBar.transform.localPosition = Vector3.zero;
@@ -161,7 +161,9 @@ public class BarChartManager : MonoBehaviour
             }
 
             // Format the value with the appropriate currency symbol and format
-            barLabel.text = FormatValue(value);
+            // barLabel.text = $"{value}"; // Example with 2 decimal places
+            // barLabel.text = await FormatValueAsync(value);
+            barLabel.text = FormatRTLNumber(value);
             RectTransform labelRect = barLabel.GetComponent<RectTransform>();
             labelRect.anchorMin = new Vector2(0.5f, 0f);
             labelRect.anchorMax = new Vector2(0.5f, 0f);
@@ -171,30 +173,42 @@ public class BarChartManager : MonoBehaviour
         }
     }
 
-    private string FormatValue(float value)
+    private string FormatRTLNumber(float number)
     {
-        if (ShouldUseRTL())
-        {
-            // Format number using fa-IR culture with General ("G") specifier
-            string formattedNumber = value.ToString("G", new CultureInfo("fa-IR"));
-            string ltrNumber = "\u200E" + formattedNumber;
-            // Get the currency symbol/unit separately for Farsi
-            var symbolTask = GetLocalizedStringAsync(UILocalizationTable, "currency_symbol"); 
-            symbolTask.Wait(); // TODO: Consider async/await pattern here too
-            string currencySymbol = symbolTask.Result;
-
-            // Combine number and symbol (adjust spacing as needed for Farsi)
-            return ltrNumber;// + " " + currencySymbol; 
-        }
-        else
-        {
-            // For other languages, use the combined currency_format string
-            var formatTask = GetLocalizedStringAsync(UILocalizationTable, "currency_format");
-            formatTask.Wait(); 
-            string format = formatTask.Result;
-            return string.Format(format, value);
-        }
+        string numStr = number.ToString();
+        string[] parts = numStr.Split('.');
+        
+        if (parts.Length == 1)
+            return parts[0];
+            
+        return $"{parts[1]}{"/"}{parts[0]}";
     }
+
+    // private async Task<string> FormatValueAsync(float value)
+    // {
+    //     if (ShouldUseRTL())
+    //     {
+    //         // Create Persian culture with Western numerals
+    //         var customCulture = (CultureInfo)new CultureInfo("fa-IR").Clone();
+    //         customCulture.NumberFormat.NativeDigits = new[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+
+    //         // Format number without rounding using custom format
+    //         string formattedNumber = value.ToString("0.######", customCulture); // Custom format avoids rounding
+    //         string ltrNumber = "\u200E" + formattedNumber; // Apply LTR marker
+
+    //         // Combine number and symbol (if needed)
+    //         return ltrNumber;
+    //     }
+    //     else
+    //     {
+    //         // Use await for other languages as well
+    //         string format = await GetLocalizedStringAsync(UILocalizationTable, "C");
+    //         return string.Format(format, value);
+    //     }
+    // }
+
+
+
 
     private async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
     {

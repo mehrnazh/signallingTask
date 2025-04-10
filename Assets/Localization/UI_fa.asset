@@ -95,7 +95,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 2088555873558528
-    m_Localized: '{0}'
+    m_Localized: '{0:C}'
     m_Metadata:
       m_Items: []
   - m_Id: 2094056095080448
