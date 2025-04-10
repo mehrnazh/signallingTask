@@ -84,6 +84,11 @@ public class GameManager : MonoBehaviour {
         if (Instance == null) {
             Instance = this;
             DontDestroyOnLoad(gameObject); // Optional: Keep GameManager across scene loads if needed
+            
+            // *** Initialize DataLogger HERE ***
+            DataLogger.Initialize(); 
+            Debug.Log("GameManager Awake: DataLogger Initialized.");
+
             InitializeComponents(); // Cache components early, but *don't* load trials yet
             // *** Do NOT start InitializeLocalizationAndUI here anymore ***
             // StartCoroutine(InitializeLocalizationAndUI());
@@ -524,6 +529,8 @@ public class GameManager : MonoBehaviour {
             if (run < totalRuns - 1) {
                  if (interRunPanel != null && interRunInterval > 0) {
                     Debug.Log($"Starting Inter-Run Break for {interRunInterval} seconds.");
+                    // *** Log the start of the break ***
+                    DataLogger.LogInterRunStart(eventCounter); 
                     // Optionally refresh inter-run text (if dynamic)
                      if (interRunText != null) {
                          // Use Task.Run or similar if needed inside coroutine, or ensure GetLocalizedStringAsync handles it
