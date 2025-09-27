@@ -2298,8 +2298,8 @@ MonoBehaviour:
   endExperimentButton: {fileID: 561879211}
   currentTask: 1
   currentSeries: 1
-  totalTrials: 45
-  trialsPerRun: 9
+  totalTrials: 5
+  trialsPerRun: 1
   trialOnsetDuration: 2
   decisionConfirmationMin: 2
   decisionConfirmationMax: 4
