@@ -80,6 +80,16 @@ public class GameManager : MonoBehaviour
     // Localization table reference
     private const string UILocalizationTable = "UI"; // Your table name
 
+    // Add this near your other private fields
+    private int startEventIndex = 0; // The index we will start the RunAllTrials loop from
+
+    private string GetStateFilePath(string pId, string task, int ser)
+    {
+        string filename = $"PID-{pId}_Task-{task}_Series-{ser}_resume.json";
+        return System.IO.Path.Combine(Application.persistentDataPath, filename);
+    }
+
+
     void Awake()
     {
         Debug.Log("GameManager Awake: Initializing Singleton.");
@@ -104,6 +114,8 @@ public class GameManager : MonoBehaviour
 
     public void StartInitializationWithOptions(TaskType task, int series, string langCode, string participantId)
     {
+        DataLogger.Reset(); // <-- ADD THIS LINE
+
         if (hasReceivedOptions)
         {
             Debug.LogWarning("GameManager: StartInitializationWithOptions called more than once!");
@@ -117,6 +129,11 @@ public class GameManager : MonoBehaviour
         this.participantId = participantId;
 
         DataLogger.SetFilePath(participantId, task.ToString(), series); // new
+
+        // --- NEW RESUME LOGIC ---
+        // Try to load a previous state BEFORE initializing everything else
+        AttemptToLoadState(participantId, task, series);
+        // -------------------------
 
         hasReceivedOptions = true;
         StartCoroutine(InitializeLocalizationAndUI(langCode));
@@ -132,7 +149,13 @@ public class GameManager : MonoBehaviour
             yield break;
         }
 
-        StartCoroutine(LoadDataSequentially());
+        // --- MODIFIED DATA LOADING ---
+        // If data was NOT loaded by the resume system, load it now.
+        if (!isDataLoaded)
+        {
+            StartCoroutine(LoadDataSequentially());
+        }
+        // ---------------------------
 
         yield return LocalizationSettings.InitializationOperation;
         if (!LocalizationSettings.HasSettings || LocalizationSettings.InitializationOperation.Status != UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
@@ -291,6 +314,43 @@ public class GameManager : MonoBehaviour
 
         SetButtonInteraction(false);
     }
+
+
+    private void SaveExperimentState()
+    {
+        // Find the index of the last event that was actually completed
+        // trialResponses.Count will be the number of completed events
+        int lastCompletedIndex = trialResponses.Count - 1;
+
+        // Don't save if nothing has been completed
+        if (lastCompletedIndex < 0) return;
+
+        ExperimentState state = new ExperimentState
+        {
+            participantId = this.participantId,
+            taskType = this.currentTask.ToString(),
+            series = this.currentSeries,
+            lastCompletedEventIndex = lastCompletedIndex,
+            shuffledTrialOrder = this.currentTrialList,
+            attentionTestEventIndices = new List<int>(this.attentionTestIndices), // Convert HashSet to List for serialization
+            // Add this line to include responses in the save file
+            trialResponses = new List<string>(this.trialResponses)
+        };
+
+        string jsonState = JsonUtility.ToJson(state, true); // 'true' for pretty print
+        string filePath = GetStateFilePath(this.participantId, this.currentTask.ToString(), this.currentSeries);
+
+        try
+        {
+            System.IO.File.WriteAllText(filePath, jsonState);
+            Debug.Log($"<color=green>Experiment state saved successfully to {filePath}</color>");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Failed to save experiment state: {ex.Message}");
+        }
+    }
+
 
     private void LoadAndShuffleTrials()
     {
@@ -453,38 +513,22 @@ public class GameManager : MonoBehaviour
             trialsPerRun = totalEvents;
         }
         int totalRuns = (trialsPerRun > 0) ? Mathf.CeilToInt((float)totalEvents / trialsPerRun) : 1;
-        // new
+
         Debug.Log($"RunAllTrials: {totalEvents} total events ({actualRegularTrials} regular, {actualAttentionTests} attention). {trialsPerRun} events/run. {totalRuns} runs total.");
 
         int eventCounter = 0;
 
-        // FIX: Use a single loop that strictly iterates from 0 up to, but not including, totalEvents.
-        for (int eventIndex = 0; eventIndex < totalEvents; eventIndex++)
+        // FIX: Use a single loop that strictly iterates from startEventIndex up to, but not including, totalEvents.
+        for (int eventIndex = startEventIndex; eventIndex < totalEvents; eventIndex++)
         {
             // Calculate the current run number (0-based) and the trial index within the run (0-based)
             int run = eventIndex / trialsPerRun;
             int trialInRun = eventIndex % trialsPerRun;
 
             // Check for the start of a new run
-            if (trialInRun == 0)
+            if (trialInRun == 0 && eventIndex > 0)
             {
-                //end new
-
-                //        Debug.Log($"RunAllTrials: {totalEvents} total events ({actualRegularTrials} regular, {actualAttentionTests} attention). {trialsPerRun} events/run. {totalRuns} runs total.");
-
-                //int eventCounter = 0; // Track overall event number (1-based for logging)
-
-                //// Loop through each run
-                //for (int run = 0; run < totalRuns; run++) {
                 Debug.Log($"---------- Starting Run {run + 1} / {totalRuns} ----------");
-                //// Loop through each event within the run
-                //for (int trialInRun = 0; trialInRun < trialsPerRun; trialInRun++) {
-                //    int eventIndex = run * trialsPerRun + trialInRun; // Calculate the 0-based index in the overall event sequence
-
-                //     // Stop if we've processed all planned events
-                //     if (eventIndex >= totalEvents) {
-                //         Debug.Log($"Run {run + 1}: Reached end of event list ({eventIndex}/{totalEvents}). Ending run early.");
-                //         break; // Exit inner loop for this run
             }
 
             eventCounter = eventIndex + 1;
@@ -519,15 +563,18 @@ public class GameManager : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogError($"Adjusted trial index {adjustedIndex} is out of bounds (0 to {currentTrialList.Count - 1}) for event index {eventIndex}. Skipping event.");
-                    if (trialResponses.Count == eventCounter - 1)
-                        trialResponses.Add("Error/Skipped");
-                    else
-                        Debug.LogError($"Could not add Error/Skipped response, response count ({trialResponses.Count}) != expected ({eventCounter - 1})");
+                    // This new logic correctly handles the error and keeps the data synchronized.
+                    Debug.LogError($"Adjusted trial index {adjustedIndex} is out of bounds for currentTrialList (size: {currentTrialList.Count}) at event index {eventIndex}. Skipping and logging as an error.");
+
+                    // Add a placeholder to the response list to keep counts correct.
+                    trialResponses.Add("Error/Skipped_OutOfBounds");
+
+                    // Also log this skipped event to the final data file for a complete record.
+                    DataLogger.LogTrial(eventCounter, "Error", "Skipped_OutOfBounds", 0f, new List<float>());
                 }
             }
             Debug.Log($"---------- Event {eventCounter} Finished ----------");
-            //new
+
             // Check for Inter-Run break condition: end of a run AND not the very last run
             if (trialInRun == trialsPerRun - 1 && run < totalRuns - 1)
             {
@@ -535,15 +582,8 @@ public class GameManager : MonoBehaviour
 
                 // *** ROBUSTNESS EDIT: Flush data to file after each run ***
                 DataLogger.FlushData();
-                //end new
+                SaveExperimentState();
 
-                //}
-
-                //Debug.Log($"---------- Run {run + 1} Finished ----------");
-
-                //// --- Inter-run break logic ---
-                //// Check if it's not the very last run
-                //if (run < totalRuns - 1) {
                 if (interRunPanel != null && interRunInterval > 0)
                 {
                     Debug.Log($"Starting Inter-Run Break for {interRunInterval} seconds.");
@@ -558,8 +598,7 @@ public class GameManager : MonoBehaviour
                     interRunPanel.SetActive(true);
                     trialPanel?.SetActive(false);
                     fixationPanel?.SetActive(false);
-                    yield return StartCoroutine(WaitPrecise(interRunInterval)); // Use precise wait
-                    //yield return new WaitForSeconds(interRunInterval); // Wait for the specified duration
+                    yield return StartCoroutine(WaitPrecise(interRunInterval));
                     interRunPanel.SetActive(false);
                     Debug.Log("Inter-Run Break Finished.");
                 }
@@ -568,20 +607,105 @@ public class GameManager : MonoBehaviour
                     if (interRunPanel == null) Debug.LogWarning("InterRunPanel not assigned. Skipping break.");
                     else Debug.Log("InterRunInterval is 0. Skipping break.");
                 }
-                //} else {
-                //     Debug.Log($"Finished last run ({run + 1}/{totalRuns}). No more breaks.");
             }
         }
-        //new
-        // This is the correct place for the final log and cleanup after the loop completes
+
         Debug.Log($"---------- Run {totalRuns} Finished ----------");
 
         // Ensure data is flushed after the very last run
         DataLogger.FlushData();
+        SaveExperimentState();
 
         Debug.Log("RunAllTrials: All runs completed.");
         EndTrials();
-    }//end new
+    }
+
+    private void DeleteStateFile()
+    {
+        string filePath = GetStateFilePath(this.participantId, this.currentTask.ToString(), this.currentSeries);
+        if (System.IO.File.Exists(filePath))
+        {
+            try
+            {
+                System.IO.File.Delete(filePath);
+                Debug.Log("Experiment completed. Resume file deleted.");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"Could not delete resume file: {ex.Message}");
+            }
+        }
+    }
+
+    private void AttemptToLoadState(string pId, TaskType task, int ser)
+    {
+        string filePath = GetStateFilePath(pId, task.ToString(), ser);
+        if (System.IO.File.Exists(filePath))
+        {
+            Debug.Log($"<color=orange>Resume file found at {filePath}. Attempting to load state.</color>");
+            try
+            {
+                string jsonState = System.IO.File.ReadAllText(filePath);
+                ExperimentState loadedState = JsonUtility.FromJson<ExperimentState>(jsonState);
+
+                // Sanity check
+                if (loadedState.participantId == pId)
+                {
+                    // Restore the state
+                    this.currentTrialList = loadedState.shuffledTrialOrder;
+                    this.attentionTestIndices = new HashSet<int>(loadedState.attentionTestEventIndices);
+
+                    // Add this line to restore the response history
+                    this.trialResponses = new List<string>(loadedState.trialResponses);
+
+                    // This is the key part: set the starting index for the trial loop
+                    this.startEventIndex = loadedState.lastCompletedEventIndex + 1;
+                    this.totalTrials = this.currentTrialList.Count;
+
+                    // +++++++++++++++++++++++ START: ADD THIS NEW BLOCK +++++++++++++++++++++++
+                    // CRITICAL FIX: We must reload the attention tests from the loader,
+                    // as they are not saved in the JSON state file.
+                    if (SignallingTaskData.SignallingTrialLoader.Instance != null && SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests != null)
+                    {
+                        this.attentionTests = new List<SignallingTaskData.AttentionTestData>(SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests);
+                        Debug.Log($"Loaded {this.attentionTests.Count} attention tests from SignallingTrialLoader during resume.");
+                    }
+                    else
+                    {
+                        Debug.LogError("AttemptToLoadState: Failed to load attention tests from SignallingTrialLoader. Attention tests will fail.");
+                        this.attentionTests = new List<SignallingTaskData.AttentionTestData>(); // Ensure it's an empty list, not null
+                    }
+                    // ++++++++++++++++++++++++ END: ADD THIS NEW BLOCK ++++++++++++++++++++++++
+
+                    // Re-create the helper dictionary for attention tests
+                    attentionTestIndexToTestIndex.Clear();
+                    List<int> sortedIndices = new List<int>(this.attentionTestIndices);
+                    sortedIndices.Sort();
+                    for (int i = 0; i < sortedIndices.Count; i++)
+                    {
+                        attentionTestIndexToTestIndex[sortedIndices[i]] = i;
+                    }
+
+                    Debug.Log($"<color=green>State successfully loaded. Resuming from event number {this.startEventIndex + 1}.</color>");
+
+                    // Since we are resuming, we mark data as "loaded"
+                    isDataLoaded = true;
+                }
+                else
+                {
+                    Debug.LogWarning("Found resume file, but participant ID did not match. Starting a new session.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"Error loading experiment state, a new session will be started. Error: {ex.Message}");
+            }
+        }
+        else
+        {
+            Debug.Log("No resume file found. Starting a new session.");
+        }
+    }
     private int GetAdjustedTrialIndex(int eventIndex)
     {
         int adjustment = 0;
@@ -886,16 +1010,12 @@ public class GameManager : MonoBehaviour
         //new
         DataLogger.SaveData(participantId, currentTask.ToString(), currentSeries);
         Debug.Log($"EndExperiment: Final data flush requested.");
+        DeleteStateFile(); // <-- ADD THIS LINE
+
         //end new
 
-        //// --- 1. Save Data --- 
-        //string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss"); // Underscore for readability
-        // // *** Use Participant ID in filename ***
-        // string filename = $"PID-{participantId}_Task-{currentTask}_Series-{currentSeries}_{timestamp}.csv";
-        // DataLogger.SaveData(filename); // Assume SaveData handles logging internally
-        // Debug.Log($"EndExperiment: Data save requested to '{filename}'.");
 
-        // // --- 2. Display Final Message ---
+        // --- 2. Display Final Message ---
         if (instructionPanel != null && instructionText != null)
         {
             instructionPanel.SetActive(true);
@@ -1020,6 +1140,7 @@ public class GameManager : MonoBehaviour
             attentionTestIndexToTestIndex.Clear();
             return;
         }
+
         if (SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests == null)
         {
             Debug.LogWarning("SignallingTrialLoader.Instance.AttentionTests is null. Cannot insert tests.");
@@ -1032,115 +1153,55 @@ public class GameManager : MonoBehaviour
 
         attentionTestIndices.Clear();
         attentionTestIndexToTestIndex.Clear();
+
         int numAttentionTests = attentionTests.Count;
         int numRegularTrials = currentTrialList?.Count ?? 0;
-        //new
+        int totalEvents = numRegularTrials + numAttentionTests;
 
-        if (numAttentionTests == 0 || numRegularTrials == 0) return;
-
-        // --- NEW, ROBUST LOGIC ---
-        System.Random rng = new System.Random();
-
-        // 1. Determine a set of potential insertion indices (0 to numRegularTrials - 1).
-        // Since attention tests are inserted *between* regular trials, we use the number of trials as the base.
-        List<int> possibleInsertSlots = Enumerable.Range(0, numRegularTrials + numAttentionTests).ToList();
-
-        // Remove indices that are too close to the end if we have limited data.
-        // A common practice is to skip the first and last few slots.
-
-        // 2. Select `numAttentionTests` random, non-repeating positions from the total available events slots.
-        // This implicitly handles spacing and collisions by picking unique indices from the final list.
-        List<int> randomInsertionIndices = new List<int>();
-
-        // Get the list of all possible event indices (0 to totalEvents - 1)
-        List<int> allEventIndices = Enumerable.Range(0, numRegularTrials + numAttentionTests).ToList();
-
-        // Ensure the regular trials are not all in one clump, e.g. skip the first few slots for attention tests
-        int minStartOffset = 2;
-
-        // Select random indices for the attention tests
-        //end new
-
-        //if (numAttentionTests == 0) {
-        //     // Debug.Log("InsertAttentionTests: No attention tests to insert.");
-        //     return;
-        //}
-        //if (numRegularTrials == 0 && numAttentionTests > 0) {
-        //    Debug.LogWarning("InsertAttentionTests: Zero regular trials loaded. Inserting all attention tests at the beginning.");
-        //    for(int i=0; i<numAttentionTests; i++) {
-        //         attentionTestIndices.Add(i);
-        //         attentionTestIndexToTestIndex[i] = i;
-        //    }
-        //} else if (numRegularTrials > 0) {
-        //    // Define insertion parameters
-        //    int minSpacing = 4;
-        //    int maxSpacing = 7;
-        //    int minStartIndex = 4;
-        //    int maxStartIndex = 7;
-
-        //    // Clamp start index based on available regular trials (cannot start *after* the last regular trial slot)
-        //    minStartIndex = Mathf.Min(minStartIndex, numRegularTrials);
-        //    maxStartIndex = Mathf.Min(maxStartIndex, numRegularTrials);
-        //    if (minStartIndex > maxStartIndex) minStartIndex = maxStartIndex; // Ensure min <= max
-
-
-        //    // --- Simple Sequential Placement Logic ---
-        //    System.Random rng = new System.Random();
-        //    int currentEventIndex = (numRegularTrials > 0 && maxStartIndex >= minStartIndex) ? rng.Next(minStartIndex, maxStartIndex + 1) : 0;
-
-        int testsPlaced = 0;
-        //new
-        while (testsPlaced < numAttentionTests)
+        if (numAttentionTests == 0 || numRegularTrials == 0)
         {
-            // Calculate remaining slots *after* accounting for tests already placed
-            int maxIndex = numRegularTrials + testsPlaced;
-            if (maxIndex < minStartOffset) maxIndex = minStartOffset; // Safety check
+            Debug.Log("InsertAttentionTests: Not enough regular trials or attention tests to perform insertion.");
+            return;
+        }
 
-            // Choose a random index between minStartOffset and the end of the current possible events
-            int randomIndex = rng.Next(minStartOffset, maxIndex + 1);
+        // --- CORRECTED, ROBUST LOGIC ---
 
-            // If we successfully place the test (no collision with already placed tests)
-            if (attentionTestIndices.Add(randomIndex))
-            {
-                // We must ensure this insertion index is unique across ALL tests.
-                // The HashSet 'attentionTestIndices' handles this perfectly.
-                attentionTestIndexToTestIndex[randomIndex] = testsPlaced;
-                //end new
-                //int totalEventSlots = numRegularTrials + numAttentionTests;
+        // 1. Define the pool of possible event indices where a test can be placed.
+        // We will prevent tests from appearing in the first 2 slots for better distribution.
+        int minStartIndex = 2;
+        if (totalEvents <= minStartIndex)
+        {
+            Debug.LogWarning("Not enough total events to insert attention tests according to rules. Skipping insertion.");
+            return;
+        }
+        List<int> possibleIndices = Enumerable.Range(minStartIndex, totalEvents - minStartIndex).ToList();
 
-                //while (testsPlaced < numAttentionTests && currentEventIndex < totalEventSlots) {
-                //     // Place the test at the current index (if not already taken)
-                //     if (!attentionTestIndices.Contains(currentEventIndex)) {
-                //        attentionTestIndices.Add(currentEventIndex);
-                //        attentionTestIndexToTestIndex[currentEventIndex] = testsPlaced;
-                //} else {
-                //     // Index conflict (should be rare with this logic unless parameters are strange)
-                //     // Increment and try next slot in the next iteration
-                //     currentEventIndex++;
-                //     continue;
-                //}
+        // 2. Shuffle the list of possible indices randomly.
+        System.Random rng = new System.Random();
+        possibleIndices = possibleIndices.OrderBy(x => rng.Next()).ToList();
 
-                //// Calculate the position for the *next* test
-                //if (testsPlaced < numAttentionTests) {
-                //    currentEventIndex += rng.Next(minSpacing, maxSpacing + 1);
-                //}
-                testsPlaced++;
-            }
+        // 3. Take the first 'numAttentionTests' indices from the shuffled list.
+        // This guarantees we get unique, random positions.
+        List<int> chosenIndices = possibleIndices.Take(numAttentionTests).ToList();
+        chosenIndices.Sort(); // Sort them to place tests in chronological order.
+
+        // 4. Populate the lookup collections correctly.
+        for (int i = 0; i < chosenIndices.Count; i++)
+        {
+            int eventIndex = chosenIndices[i];
+            attentionTestIndices.Add(eventIndex);
+            attentionTestIndexToTestIndex[eventIndex] = i;
         }
 
         if (attentionTestIndices.Count > 0)
         {
-            List<int> sortedIndices = new List<int>(attentionTestIndices);
-            sortedIndices.Sort();
-            Debug.Log($"InsertAttentionTests: Inserted {attentionTestIndices.Count} tests at event indices: {string.Join(", ", sortedIndices)}. Total Events: {numRegularTrials + attentionTestIndices.Count}");
-            //Debug.Log($"InsertAttentionTests: Inserted {attentionTestIndices.Count} tests at event indices: {string.Join(", ", sortedIndices)}");
+            Debug.Log($"InsertAttentionTests: Inserted {attentionTestIndices.Count} tests at event indices: {string.Join(", ", chosenIndices)}. Total Events: {totalEvents}");
         }
         else if (numAttentionTests > 0)
         {
-            Debug.LogWarning("InsertAttentionTests: Failed to place any attention tests.");
+            Debug.LogWarning("InsertAttentionTests: Failed to place any attention tests with the new logic.");
         }
     }
-
     async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
     {
         if (!LocalizationSettings.HasSettings || LocalizationSettings.StringDatabase == null)

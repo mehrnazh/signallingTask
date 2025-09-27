@@ -19,6 +19,18 @@ public static class DataLogger
         csvLines.Add("ParticipantID,EventNumber,AbsoluteTime,TaskTypeOrEvent,MessageChosenOrResponse,ReactionTime,BarData");
     }
 
+    // Add this new public static method to DataLogger.cs
+
+    /// <summary>
+    /// Resets the logger for a new experiment session within the same application instance.
+    /// </summary>
+    public static void Reset()
+    {
+        currentFilePath = ""; // Clear the file path
+        Initialize();         // Re-initialize lists and timers
+        Debug.Log("DataLogger has been reset for a new session.");
+    }
+
     /// <summary>
     /// Sets the full file path for the session's data log. Must be called once during setup.
     /// </summary>
