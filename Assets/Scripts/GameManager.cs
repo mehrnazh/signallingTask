@@ -49,6 +49,47 @@ public class GameManager : MonoBehaviour
     public float interRunInterval = 10f;
     public float closeDelay = 10f; // Delay before closing after final message
 
+    [Header("Training Session UI")]
+    public TMP_Text trainingAnnotationText; // Assign the new text element here
+    public FeedbackManager feedbackManager; // Assign your FeedbackManager object here
+
+    [Header("Training Feedback UI")]
+    public GameObject trainingFeedbackPanel; // Assign your new panel
+    public TMP_Text trainingFeedbackText;   // Assign the text from the new panel
+    public Button trainingContinueButton;   // Assign the button from the new panel
+
+    // NEW: A struct to define a single training trial
+    [System.Serializable]
+    public struct TrainingTrial
+    {
+        public float optionASelf;
+        public float optionAOther;
+        public float optionBSelf;
+        public float optionBOther;
+
+        [Header("Annotation Sequence")]
+        [TextArea(2, 3)] public string annotation1;
+        [TextArea(2, 3)] public string annotation2;
+        [TextArea(2, 3)] public string annotation3;
+        [TextArea(2, 3)] public string annotation4;
+        [TextArea(2, 3)] public string annotation5;
+
+        [Header("Post-Decision Annotations")]
+        [TextArea(2, 3)] public string postDecisionAnnotationA;
+        [TextArea(2, 3)] public string postDecisionAnnotationB;
+        [TextArea] public string annotation;
+
+        [Header("Correct Answer")]
+        public string correctAnswer; // "A" or "B"
+    }
+
+    [Header("Training Session Data")]
+    public List<TrainingTrial> trainingTrials; // We will define training trials in the Inspector
+
+    // NEW: Enum and variable to manage the experiment's master flow
+    private enum ExperimentPhase { Setup, InstructionsPart1, Training, InstructionsPart2, MainTrials, Finished }
+    private ExperimentPhase currentPhase = ExperimentPhase.Setup;
+
     // Cached components
     private Image optionAButtonImage;
     private Image optionBButtonImage;
@@ -190,26 +231,28 @@ public class GameManager : MonoBehaviour
         {
             if (LocalizationSettings.SelectedLocale != null)
             {
-                string langCode = LocalizationSettings.SelectedLocale.Identifier.Code;
-                Debug.Log($"InitializeLocalizationAndUI: Initializing instructions via InstructionManager for Series: {currentSeries}, Task: {currentTask}, Lang: {langCode}");
+                //string langCode = LocalizationSettings.SelectedLocale.Identifier.Code;
+                //Debug.Log($"InitializeLocalizationAndUI: Initializing instructions via InstructionManager for Series: {currentSeries}, Task: {currentTask}, Lang: {langCode}");
 
-                instructionManager.gameObject.SetActive(true);
-                instructionManager.InitializeInstructions(currentSeries, currentTask, langCode, this);
-                instructionPanel?.SetActive(true);
-                Debug.Log("InitializeLocalizationAndUI: Handed control to InstructionManager. Waiting for completion signal.");
-
+                //instructionManager.gameObject.SetActive(true);
+                //instructionManager.InitializeInstructions(currentSeries, currentTask, langCode, this);
+                //instructionPanel?.SetActive(true);
+                Debug.Log("InitializeLocalizationAndUI: Initialization complete. Ready to start master flow.");
+                StartExperimentFlow();
             }
             else
             {
-                Debug.LogError("InitializeLocalizationAndUI: SelectedLocale became null after setting! Cannot init instructions.");
-                StartGameInternal();
+                Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions phase.");
+                //instructionPanel?.SetActive(false);
+                // MODIFIED: Also needs to call the new flow manager
+                StartExperimentFlow();
             }
         }
         else
         {
             Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions phase.");
             instructionPanel?.SetActive(false);
-            StartGameInternal();
+            StartExperimentFlow();
         }
     }
 
@@ -469,24 +512,202 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    public void StartGameInternal()
+    // MODIFIED: This is now the entry point for the entire experiment flow.
+    public void StartExperimentFlow()
     {
-        Debug.Log("StartGameInternal: Received signal to start the main trial loop.");
-        if (instructionPanel != null)
-        {
-            instructionPanel.SetActive(false);
-            Debug.Log("StartGameInternal: Instruction Panel hidden.");
-        }
-        else
-        {
-            Debug.LogWarning("StartGameInternal: InstructionPanel reference is null, cannot hide it.");
-        }
+        Debug.Log("StartExperimentFlow: Received signal to start the master experiment flow.");
+        if (instructionPanel != null) instructionPanel.SetActive(false);
         if (instructionManager != null)
         {
-            instructionManager.gameObject.SetActive(false);
-            Debug.Log("StartGameInternal: InstructionManager GameObject deactivated.");
+            instructionManager.Initialize(this); // Pass reference to self
+            instructionManager.gameObject.SetActive(false); // Start inactive
         }
-        StartCoroutine(RunAllTrials());
+
+        currentPhase = ExperimentPhase.InstructionsPart1;
+        StartCoroutine(RunMasterFlow());
+    }
+
+    // NEW: The callback method for InstructionManager
+    public void OnInstructionSetCompleted()
+    {
+        Debug.Log($"OnInstructionSetCompleted: Finished phase {currentPhase}.");
+        // Advance to the next phase and trigger the master flow to continue
+        currentPhase++;
+        StartCoroutine(RunMasterFlow());
+    }
+
+    // NEW: The master state machine for the experiment
+    IEnumerator RunMasterFlow()
+    {
+        Debug.Log($"RunMasterFlow: Executing phase {currentPhase}.");
+
+        switch (currentPhase)
+        {
+            case ExperimentPhase.InstructionsPart1:
+                instructionPanel.SetActive(true);
+                instructionManager.gameObject.SetActive(true);
+                string langCode1 = LocalizationSettings.SelectedLocale.Identifier.Code;
+                Sprite[] part1Sprites = instructionManager.GetSpriteSet(1, currentSeries, currentTask, langCode1);
+                instructionManager.BeginInstructionSet(part1Sprites);
+                // The coroutine will now wait until OnInstructionSetCompleted is called
+                break;
+
+            case ExperimentPhase.Training:
+                instructionPanel.SetActive(false);
+                yield return StartCoroutine(RunTrainingSession());
+                // After training is done, automatically proceed to the next phase
+                OnInstructionSetCompleted();
+                break;
+
+            case ExperimentPhase.InstructionsPart2:
+                instructionPanel.SetActive(true);
+                instructionManager.gameObject.SetActive(true);
+                string langCode2 = LocalizationSettings.SelectedLocale.Identifier.Code;
+                Sprite[] part2Sprites = instructionManager.GetSpriteSet(2, currentSeries, currentTask, langCode2);
+                instructionManager.BeginInstructionSet(part2Sprites);
+                // Wait for completion
+                break;
+
+            case ExperimentPhase.MainTrials:
+                instructionPanel.SetActive(false);
+                yield return StartCoroutine(RunAllTrials());
+                break;
+
+            case ExperimentPhase.Finished:
+                Debug.Log("Master flow finished.");
+                break;
+        }
+    }
+
+    // NEW: Coroutine for the interactive training session
+    // REWRITTEN: Coroutine for the multi-stage interactive training session
+    IEnumerator RunTrainingSession()
+    {
+        Debug.Log("--- Starting Advanced Training Session ---");
+
+        // Show the main trial panel, but hide buttons initially
+        trialPanel.SetActive(true);
+        trialInfoText.text = "Training"; // Or localize this text
+        optionAButton.gameObject.SetActive(false);
+        optionBButton.gameObject.SetActive(false);
+        trainingAnnotationText.gameObject.SetActive(true);
+
+        for (int i = 0; i < trainingTrials.Count; i++)
+        {
+            TrainingTrial training = trainingTrials[i];
+            Debug.Log($"Starting training trial {i + 1}/{trainingTrials.Count}");
+
+            // Prepare the bar chart for this trial
+            barChartManager.CreateBarChart(training.optionASelf, training.optionAOther, training.optionBSelf, training.optionBOther);
+
+            // --- Annotation Sequence ---
+
+            // Part 1 & 2
+            trainingAnnotationText.text = training.annotation1;
+            yield return StartCoroutine(WaitPrecise(2.0f));
+            trainingAnnotationText.text = training.annotation1 + "\n\n" + training.annotation2;
+            yield return StartCoroutine(WaitPrecise(2.0f));
+            trainingAnnotationText.gameObject.SetActive(false);
+            yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
+
+            // Part 3 & 4
+            trainingAnnotationText.gameObject.SetActive(true);
+            trainingAnnotationText.text = training.annotation3;
+            yield return StartCoroutine(WaitPrecise(2.0f));
+            trainingAnnotationText.text = training.annotation3 + "\n\n" + training.annotation4;
+            yield return StartCoroutine(WaitPrecise(2.0f));
+            trainingAnnotationText.gameObject.SetActive(false);
+            yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
+
+            // Part 5
+            trainingAnnotationText.gameObject.SetActive(true);
+            trainingAnnotationText.text = training.annotation5;
+            yield return StartCoroutine(WaitPrecise(2.0f));
+            trainingAnnotationText.gameObject.SetActive(false);
+
+            // --- Decision Phase ---
+            Debug.Log("Training: Activating decision buttons.");
+            optionAButton.gameObject.SetActive(true);
+            optionBButton.gameObject.SetActive(true);
+            SetButtonInteraction(true);
+
+            // Localize button text
+            var taskA = GetLocalizedStringAsync(UILocalizationTable, "option_a_label");
+            var taskB = GetLocalizedStringAsync(UILocalizationTable, "option_b_label");
+            yield return new WaitUntil(() => taskA.IsCompleted && taskB.IsCompleted);
+            SetButtonText(optionAButtonText, taskA.Result);
+            SetButtonText(optionBButtonText, taskB.Result);
+
+            string choice = "";
+            bool decisionMadeThisTrial = false;
+            optionAButton.onClick.RemoveAllListeners();
+            optionBButton.onClick.RemoveAllListeners();
+            optionAButton.onClick.AddListener(() => { choice = "A"; decisionMadeThisTrial = true; });
+            optionBButton.onClick.AddListener(() => { choice = "B"; decisionMadeThisTrial = true; });
+
+            yield return new WaitUntil(() => decisionMadeThisTrial);
+            Debug.Log($"Training: Participant chose option {choice}.");
+            SetButtonInteraction(false); // Disable buttons after choice
+
+            // --- Post-Decision Annotation ---
+            trainingAnnotationText.gameObject.SetActive(true);
+            if (choice == "A")
+            {
+                trainingAnnotationText.text = training.postDecisionAnnotationA;
+            }
+            else
+            {
+                trainingAnnotationText.text = training.postDecisionAnnotationB;
+            }
+            yield return StartCoroutine(WaitPrecise(3.0f)); // Show for 3 seconds
+            trainingAnnotationText.gameObject.SetActive(false);
+            trialPanel.SetActive(false); // Hide the main trial panel
+
+            // --- Feedback Page Phase ---
+            trainingFeedbackPanel.SetActive(true);
+
+            // Perform calculation
+            float selfPayoff, otherPayoff, totalPayoff;
+            if (choice == "A")
+            {
+                selfPayoff = training.optionASelf;
+                otherPayoff = training.optionAOther;
+            }
+            else
+            {
+                selfPayoff = training.optionBSelf;
+                otherPayoff = training.optionBOther;
+            }
+            totalPayoff = selfPayoff + otherPayoff;
+
+            // Construct and display the feedback message
+            string feedbackMessage = $"You chose Option {choice}.\n\nYour payoff is: {selfPayoff}\nThe other player's payoff is: {otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}";
+            trainingFeedbackText.text = feedbackMessage;
+
+            // Wait for the user to click the "Continue" button
+            bool continuePressed = false;
+            trainingContinueButton.onClick.RemoveAllListeners();
+            trainingContinueButton.onClick.AddListener(() => { continuePressed = true; });
+
+            yield return new WaitUntil(() => continuePressed);
+
+            // Cleanup for the next trial
+            trainingFeedbackPanel.SetActive(false);
+            trialPanel.SetActive(true); // Re-activate for the next loop iteration
+        }
+
+        // Final cleanup after all training is done
+        trialPanel.SetActive(false);
+        Debug.Log("--- Training Session Complete ---");
+    }
+
+
+    // Find this method in your existing code and modify it
+    public void StartGameInternal()
+    {
+        Debug.Log("StartGameInternal: Received signal to start the main trial loop. Redirecting to master flow.");
+        // This is now the entry point to the entire experiment, not just the trials.
+        StartExperimentFlow();
     }
 
     IEnumerator RunAllTrials()
