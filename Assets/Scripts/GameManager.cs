@@ -4,9 +4,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
-//using UnityEngine.Localization;
+using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
-//using UnityEngine.Localization.Tables;
+using UnityEngine.Localization.Tables;
 using System.Threading.Tasks; 
 using System.Linq;
 //using SignallingTaskData;
@@ -49,44 +49,57 @@ public class GameManager : MonoBehaviour
     public float interRunInterval = 10f;
     public float closeDelay = 10f; // Delay before closing after final message
 
-    [Header("Training Session UI")]
-    public TMP_Text trainingAnnotationText; // Assign the new text element here
-    public FeedbackManager feedbackManager; // Assign your FeedbackManager object here
+    [Header("Training Annotation Images")]
+    public Image annotationImageCenter;
+    public Image annotationImageLeft;
+    public Image annotationImageRight;
+    //[Header("Training Session UI")]
+    //public TMP_Text trainingAnnotationText; // Assign the new text element here
 
     [Header("Training Feedback UI")]
     public GameObject trainingFeedbackPanel; // Assign your new panel
     public TMP_Text trainingFeedbackText;   // Assign the text from the new panel
     public Button trainingContinueButton;   // Assign the button from the new panel
+    public FeedbackManager feedbackManager; // Assign your FeedbackManager object here
 
-    // NEW: A struct to define a single training trial
+    // Enum for annotation positions
+    public enum AnnotationPosition { Center, Left, Right }
+
+    // Struct to define a single training trial with images
     [System.Serializable]
     public struct TrainingTrial
     {
+        [System.Serializable]
+        public struct Annotation
+        {
+            public Sprite image;
+            public AnnotationPosition position;
+        }
+        [Header("Monetary Allocations")]
         public float optionASelf;
         public float optionAOther;
         public float optionBSelf;
         public float optionBOther;
 
         [Header("Annotation Sequence")]
-        [TextArea(2, 3)] public string annotation1;
-        [TextArea(2, 3)] public string annotation2;
-        [TextArea(2, 3)] public string annotation3;
-        [TextArea(2, 3)] public string annotation4;
-        [TextArea(2, 3)] public string annotation5;
+        public Annotation annotation1;
+        public Annotation annotation2;
+        public Annotation annotation3;
+        public Annotation annotation4;
+        public Annotation annotation5;
 
         [Header("Post-Decision Annotations")]
-        [TextArea(2, 3)] public string postDecisionAnnotationA;
-        [TextArea(2, 3)] public string postDecisionAnnotationB;
-        [TextArea] public string annotation;
+        public Annotation postDecisionAnnotationA;
+        public Annotation postDecisionAnnotationB;
 
         [Header("Correct Answer")]
         public string correctAnswer; // "A" or "B"
     }
 
     [Header("Training Session Data")]
-    public List<TrainingTrial> trainingTrials; // We will define training trials in the Inspector
+    public List<TrainingTrial> trainingTrials; 
 
-    // NEW: Enum and variable to manage the experiment's master flow
+    // Enum and variable to manage the experiment's master flow
     private enum ExperimentPhase { Setup, InstructionsPart1, Training, InstructionsPart2, MainTrials, Finished }
     private ExperimentPhase currentPhase = ExperimentPhase.Setup;
 
@@ -100,36 +113,32 @@ public class GameManager : MonoBehaviour
     private LegendManager legendManager;
 
     // Optimized data structures
-    private List<SignallingTaskData.TrialData> currentTrialList; // Holds the shuffled regular trials
-    private List<string> trialResponses = new List<string>(); // Stores response ("A" or "B") for each event (trial or test) in order
-    private List<SignallingTaskData.AttentionTestData> attentionTests = new List<SignallingTaskData.AttentionTestData>(); // Holds loaded attention tests
-    private HashSet<int> attentionTestIndices = new HashSet<int>(); // Stores the 0-based *event index* where attention tests occur
-    private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>(); // Maps event index to index in attentionTests list
+    private List<SignallingTaskData.TrialData> currentTrialList;
+    private List<string> trialResponses = new List<string>(); 
+    private List<SignallingTaskData.AttentionTestData> attentionTests = new List<SignallingTaskData.AttentionTestData>();
+    private HashSet<int> attentionTestIndices = new HashSet<int>();
+    private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>(); 
 
-    private bool decisionMade = false; // Flag: true when participant makes choice in current trial/test
-    private bool selectionEnabled = false; // Flag: true when buttons/keys are active for input
-    private float decisionStartTime; // Time.realtimeSinceStartup when decision phase starts
+    private bool decisionMade = false; 
+    private bool selectionEnabled = false; 
+    private float decisionStartTime; 
 
-    // Flag to ensure GameManager setup (including localization AND data loading) is complete
     private bool isInitialized = false;
-    private bool isDataLoaded = false; // New flag specifically for data loading
-    private bool hasReceivedOptions = false; // New flag: Ensures options are set before init
+    private bool isDataLoaded = false; 
+    private bool hasReceivedOptions = false; 
 
-    // Store participant ID
-    private string participantId = "DEFAULT_ID"; // Default value
+    private string participantId = "DEFAULT_ID";
+    private const string UILocalizationTable = "UI";
+    private int startEventIndex = 0;
 
-    // Localization table reference
-    private const string UILocalizationTable = "UI"; // Your table name
-
-    // Add this near your other private fields
-    private int startEventIndex = 0; // The index we will start the RunAllTrials loop from
+    //// Add this near your other private fields
+    //private int startEventIndex = 0; // The index we will start the RunAllTrials loop from
 
     private string GetStateFilePath(string pId, string task, int ser)
     {
         string filename = $"PID-{pId}_Task-{task}_Series-{ser}_resume.json";
         return System.IO.Path.Combine(Application.persistentDataPath, filename);
     }
-
 
     void Awake()
     {
@@ -138,10 +147,8 @@ public class GameManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
-
             DataLogger.Initialize();
             Debug.Log("GameManager Awake: DataLogger Initialized.");
-
             InitializeComponents();
             Debug.Log("GameManager Awake: Singleton set. Waiting for options from SetupManager.");
         }
@@ -155,7 +162,7 @@ public class GameManager : MonoBehaviour
 
     public void StartInitializationWithOptions(TaskType task, int series, string langCode, string participantId)
     {
-        DataLogger.Reset(); // <-- ADD THIS LINE
+        DataLogger.Reset();
 
         if (hasReceivedOptions)
         {
@@ -169,13 +176,8 @@ public class GameManager : MonoBehaviour
         this.currentSeries = series;
         this.participantId = participantId;
 
-        DataLogger.SetFilePath(participantId, task.ToString(), series); // new
-
-        // --- NEW RESUME LOGIC ---
-        // Try to load a previous state BEFORE initializing everything else
+        DataLogger.SetFilePath(participantId, task.ToString(), series); 
         AttemptToLoadState(participantId, task, series);
-        // -------------------------
-
         hasReceivedOptions = true;
         StartCoroutine(InitializeLocalizationAndUI(langCode));
     }
@@ -190,13 +192,10 @@ public class GameManager : MonoBehaviour
             yield break;
         }
 
-        // --- MODIFIED DATA LOADING ---
-        // If data was NOT loaded by the resume system, load it now.
         if (!isDataLoaded)
         {
             StartCoroutine(LoadDataSequentially());
         }
-        // ---------------------------
 
         yield return LocalizationSettings.InitializationOperation;
         if (!LocalizationSettings.HasSettings || LocalizationSettings.InitializationOperation.Status != UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
@@ -231,26 +230,18 @@ public class GameManager : MonoBehaviour
         {
             if (LocalizationSettings.SelectedLocale != null)
             {
-                //string langCode = LocalizationSettings.SelectedLocale.Identifier.Code;
-                //Debug.Log($"InitializeLocalizationAndUI: Initializing instructions via InstructionManager for Series: {currentSeries}, Task: {currentTask}, Lang: {langCode}");
-
-                //instructionManager.gameObject.SetActive(true);
-                //instructionManager.InitializeInstructions(currentSeries, currentTask, langCode, this);
-                //instructionPanel?.SetActive(true);
                 Debug.Log("InitializeLocalizationAndUI: Initialization complete. Ready to start master flow.");
                 StartExperimentFlow();
             }
             else
             {
-                Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions phase.");
-                //instructionPanel?.SetActive(false);
-                // MODIFIED: Also needs to call the new flow manager
+                Debug.LogError("InitializeLocalizationAndUI: SelectedLocale became null after setting! Cannot init instructions.");
                 StartExperimentFlow();
             }
         }
         else
         {
-            Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions phase.");
+            Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions and training phase.");
             instructionPanel?.SetActive(false);
             StartExperimentFlow();
         }
@@ -358,14 +349,10 @@ public class GameManager : MonoBehaviour
         SetButtonInteraction(false);
     }
 
-
     private void SaveExperimentState()
-    {
-        // Find the index of the last event that was actually completed
-        // trialResponses.Count will be the number of completed events
+    { 
         int lastCompletedIndex = trialResponses.Count - 1;
 
-        // Don't save if nothing has been completed
         if (lastCompletedIndex < 0) return;
 
         ExperimentState state = new ExperimentState
@@ -376,7 +363,6 @@ public class GameManager : MonoBehaviour
             lastCompletedEventIndex = lastCompletedIndex,
             shuffledTrialOrder = this.currentTrialList,
             attentionTestEventIndices = new List<int>(this.attentionTestIndices), // Convert HashSet to List for serialization
-            // Add this line to include responses in the save file
             trialResponses = new List<string>(this.trialResponses)
         };
 
@@ -394,7 +380,6 @@ public class GameManager : MonoBehaviour
         }
     }
 
-
     private void LoadAndShuffleTrials()
     {
         if (SignallingTaskData.SignallingTrialLoader.Instance == null)
@@ -408,50 +393,46 @@ public class GameManager : MonoBehaviour
         Debug.Log($"LoadAndShuffleTrials: Loading trials for TaskType: {currentTask} using SignallingTrialLoader.Instance");
         if (currentTask == TaskType.Deception)
         {
-            if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-            {
-                currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-                Debug.Log($"Loaded {currentTrialList.Count} Deception trials.");
-            }
-            else
-            {
-                Debug.LogError("SignallingTrialLoader.Instance.DeceptionTrials is null or empty! Cannot proceed.");
-                currentTrialList = new List<SignallingTaskData.TrialData>();
-            }
+            currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
+            //if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
+            //{
+            //    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
+            //    Debug.Log($"Loaded {currentTrialList.Count} Deception trials.");
+            //}
+            //else
+            //{
+            //    Debug.LogError("SignallingTrialLoader.Instance.DeceptionTrials is null or empty! Cannot proceed.");
+            //    currentTrialList = new List<SignallingTaskData.TrialData>();
+            //}
         }
         else
         {
-            if (SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials.Count > 0)
-            {
-                currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
-                Debug.Log($"Loaded {currentTrialList.Count} Control trials.");
-            }
-            else
-            {
-                Debug.LogWarning("SignallingTrialLoader.Instance.ControlTrials is null or empty. Using Deception trials as fallback for Control task.");
-                if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-                {
-                    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-                }
-                else
-                {
-                    Debug.LogError("Fallback failed: SignallingTrialLoader.Instance.DeceptionTrials is also null or empty! Cannot proceed.");
-                    currentTrialList = new List<SignallingTaskData.TrialData>();
-                }
-            }
+            currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
+            //if (SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials.Count > 0)
+            //{
+            //    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
+            //    Debug.Log($"Loaded {currentTrialList.Count} Control trials.");
+            //}
+            //else
+            //{
+            //    Debug.LogWarning("SignallingTrialLoader.Instance.ControlTrials is null or empty. Using Deception trials as fallback for Control task.");
+            //    if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
+            //    {
+            //        currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
+            //    }
+            //    else
+            //    {
+            //        Debug.LogError("Fallback failed: SignallingTrialLoader.Instance.DeceptionTrials is also null or empty! Cannot proceed.");
+            //        currentTrialList = new List<SignallingTaskData.TrialData>();
+            //    }
+            //}
         }
 
         ShuffleTrials(currentTrialList);
 
-        // 💡 NEW CODE: Define the maximum number of trials you want to run.
-        // You can use the 'totalTrials' variable, or hard-code a value like 5.
-        // We'll use the 'totalTrials' member variable (defaulted to 5, set in Inspector).
         int maxTrialsToRun = this.totalTrials;
-
-        // Ensure the list is not null and has items before limiting
         if (currentTrialList != null && currentTrialList.Count > maxTrialsToRun)
         {
-            // Limit the list to 'maxTrialsToRun' trials after they have been shuffled.
             currentTrialList = currentTrialList.Take(maxTrialsToRun).ToList();
             Debug.Log($"Limited total regular trials from initial load to: {currentTrialList.Count}");
         }
@@ -511,8 +492,12 @@ public class GameManager : MonoBehaviour
             StartCoroutine(SaveAndQuitCoroutine("EscapeKey"));
         }
     }
+    public void StartGameInternal()
+    {
+        Debug.Log("StartGameInternal: Received signal to start the main trial loop. Redirecting to master flow.");
+        StartExperimentFlow();
+    }
 
-    // MODIFIED: This is now the entry point for the entire experiment flow.
     public void StartExperimentFlow()
     {
         Debug.Log("StartExperimentFlow: Received signal to start the master experiment flow.");
@@ -527,16 +512,13 @@ public class GameManager : MonoBehaviour
         StartCoroutine(RunMasterFlow());
     }
 
-    // NEW: The callback method for InstructionManager
     public void OnInstructionSetCompleted()
     {
         Debug.Log($"OnInstructionSetCompleted: Finished phase {currentPhase}.");
-        // Advance to the next phase and trigger the master flow to continue
         currentPhase++;
         StartCoroutine(RunMasterFlow());
     }
 
-    // NEW: The master state machine for the experiment
     IEnumerator RunMasterFlow()
     {
         Debug.Log($"RunMasterFlow: Executing phase {currentPhase}.");
@@ -549,13 +531,11 @@ public class GameManager : MonoBehaviour
                 string langCode1 = LocalizationSettings.SelectedLocale.Identifier.Code;
                 Sprite[] part1Sprites = instructionManager.GetSpriteSet(1, currentSeries, currentTask, langCode1);
                 instructionManager.BeginInstructionSet(part1Sprites);
-                // The coroutine will now wait until OnInstructionSetCompleted is called
                 break;
 
             case ExperimentPhase.Training:
                 instructionPanel.SetActive(false);
                 yield return StartCoroutine(RunTrainingSession());
-                // After training is done, automatically proceed to the next phase
                 OnInstructionSetCompleted();
                 break;
 
@@ -565,7 +545,6 @@ public class GameManager : MonoBehaviour
                 string langCode2 = LocalizationSettings.SelectedLocale.Identifier.Code;
                 Sprite[] part2Sprites = instructionManager.GetSpriteSet(2, currentSeries, currentTask, langCode2);
                 instructionManager.BeginInstructionSet(part2Sprites);
-                // Wait for completion
                 break;
 
             case ExperimentPhase.MainTrials:
@@ -579,136 +558,241 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // NEW: Coroutine for the interactive training session
-    // REWRITTEN: Coroutine for the multi-stage interactive training session
     IEnumerator RunTrainingSession()
     {
         Debug.Log("--- Starting Advanced Training Session ---");
 
-        // Show the main trial panel, but hide buttons initially
         trialPanel.SetActive(true);
-        trialInfoText.text = "Training"; // Or localize this text
-        optionAButton.gameObject.SetActive(false);
-        optionBButton.gameObject.SetActive(false);
-        trainingAnnotationText.gameObject.SetActive(true);
+        trialInfoText.text = "Training"; // Or localize this text]
 
+        //optionAButton.gameObject.SetActive(false);
+        //optionBButton.gameObject.SetActive(false);
+        //trainingAnnotationText.gameObject.SetActive(true);
         for (int i = 0; i < trainingTrials.Count; i++)
         {
             TrainingTrial training = trainingTrials[i];
             Debug.Log($"Starting training trial {i + 1}/{trainingTrials.Count}");
 
-            // Prepare the bar chart for this trial
             barChartManager.CreateBarChart(training.optionASelf, training.optionAOther, training.optionBSelf, training.optionBOther);
 
-            // --- Annotation Sequence ---
+            if (i == 0)
+            {
+                yield return ShowAnnotation(training.annotation1, 2.0f);
+                yield return ShowAnnotation(training.annotation2, 2.0f);
+                HideAllAnnotationImages();
+                yield return StartCoroutine(WaitPrecise(0.5f));
 
-            // Part 1 & 2
-            trainingAnnotationText.text = training.annotation1;
-            yield return StartCoroutine(WaitPrecise(2.0f));
-            trainingAnnotationText.text = training.annotation1 + "\n\n" + training.annotation2;
-            yield return StartCoroutine(WaitPrecise(2.0f));
-            trainingAnnotationText.gameObject.SetActive(false);
-            yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
+                yield return ShowAnnotation(training.annotation3, 2.0f);
+                yield return ShowAnnotation(training.annotation4, 2.0f);
+                HideAllAnnotationImages();
+                yield return StartCoroutine(WaitPrecise(0.5f));
 
-            // Part 3 & 4
-            trainingAnnotationText.gameObject.SetActive(true);
-            trainingAnnotationText.text = training.annotation3;
-            yield return StartCoroutine(WaitPrecise(2.0f));
-            trainingAnnotationText.text = training.annotation3 + "\n\n" + training.annotation4;
-            yield return StartCoroutine(WaitPrecise(2.0f));
-            trainingAnnotationText.gameObject.SetActive(false);
-            yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
+                yield return ShowAnnotation(training.annotation5, 2.0f);
+                HideAllAnnotationImages();
+                //// Part 1 & 2
+                //trainingAnnotationText.text = training.annotation1;
+                //yield return StartCoroutine(WaitPrecise(2.0f));
+                //trainingAnnotationText.text = training.annotation1 + "\n\n" + training.annotation2;
+                //yield return StartCoroutine(WaitPrecise(2.0f));
+                //trainingAnnotationText.gameObject.SetActive(false);
+                //yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
 
-            // Part 5
-            trainingAnnotationText.gameObject.SetActive(true);
-            trainingAnnotationText.text = training.annotation5;
-            yield return StartCoroutine(WaitPrecise(2.0f));
-            trainingAnnotationText.gameObject.SetActive(false);
+                //// Part 3 & 4
+                //trainingAnnotationText.gameObject.SetActive(true);
+                //trainingAnnotationText.text = training.annotation3;
+                //yield return StartCoroutine(WaitPrecise(2.0f));
+                //trainingAnnotationText.text = training.annotation3 + "\n\n" + training.annotation4;
+                //yield return StartCoroutine(WaitPrecise(2.0f));
+                //trainingAnnotationText.gameObject.SetActive(false);
+                //yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
 
-            // --- Decision Phase ---
+                //// Part 5
+                //trainingAnnotationText.gameObject.SetActive(true);
+                //trainingAnnotationText.text = training.annotation5;
+                //yield return StartCoroutine(WaitPrecise(2.0f));
+                //trainingAnnotationText.gameObject.SetActive(false);
+            }
+            // --- Decision Phase (runs for ALL trials) ---
             Debug.Log("Training: Activating decision buttons.");
             optionAButton.gameObject.SetActive(true);
             optionBButton.gameObject.SetActive(true);
             SetButtonInteraction(true);
 
-            // Localize button text
             var taskA = GetLocalizedStringAsync(UILocalizationTable, "option_a_label");
             var taskB = GetLocalizedStringAsync(UILocalizationTable, "option_b_label");
             yield return new WaitUntil(() => taskA.IsCompleted && taskB.IsCompleted);
-            SetButtonText(optionAButtonText, taskA.Result);
-            SetButtonText(optionBButtonText, taskB.Result);
 
+            // NEW: Check if the localization tasks succeeded before trying to use the result.
+            if (taskA.IsFaulted || taskB.IsFaulted)
+            {
+                Debug.LogError("Failed to load localized button text! Check your Localization Table for 'option_a_label' and 'option_b_label'. Using fallback text.");
+                SetButtonText(optionAButtonText, "[Option A]");
+                SetButtonText(optionBButtonText, "[Option B]");
+            }
+            else
+            {
+                // This is the success case
+                SetButtonText(optionAButtonText, taskA.Result);
+                SetButtonText(optionBButtonText, taskB.Result);
+            }
+
+            //SetButtonText(optionAButtonText, taskA.Result);
+            //SetButtonText(optionBButtonText, taskB.Result);
+
+            // --- MODIFIED: The input handling section is updated below ---
             string choice = "";
             bool decisionMadeThisTrial = false;
             optionAButton.onClick.RemoveAllListeners();
-            optionBButton.onClick.RemoveAllListeners();
+            optionBButton.onClick.RemoveAllListeners(); // Fixed a small typo here too
             optionAButton.onClick.AddListener(() => { choice = "A"; decisionMadeThisTrial = true; });
             optionBButton.onClick.AddListener(() => { choice = "B"; decisionMadeThisTrial = true; });
 
-            yield return new WaitUntil(() => decisionMadeThisTrial);
+            // NEW: Replaced 'WaitUntil' with a loop that checks for keyboard input each frame.
+            while (!decisionMadeThisTrial)
+            {
+                if (Input.GetKeyDown(KeyCode.LeftArrow))
+                {
+                    // Simulate a click on the left button
+                    choice = "A";
+                    decisionMadeThisTrial = true;
+                }
+                else if (Input.GetKeyDown(KeyCode.RightArrow))
+                {
+                    // Simulate a click on the right button
+                    choice = "B";
+                    decisionMadeThisTrial = true;
+                }
+                yield return null; // Wait for the next frame before checking again
+            }
+            // --- END OF MODIFICATION ---
+
+            //yield return new WaitUntil(() => decisionMadeThisTrial);
             Debug.Log($"Training: Participant chose option {choice}.");
             SetButtonInteraction(false); // Disable buttons after choice
 
-            // --- Post-Decision Annotation ---
-            trainingAnnotationText.gameObject.SetActive(true);
-            if (choice == "A")
+            if (i == 0)
             {
-                trainingAnnotationText.text = training.postDecisionAnnotationA;
+                //    trainingAnnotationText.gameObject.SetActive(true);
+                //    if (choice == "A")
+                //    {
+                //        trainingAnnotationText.text = training.postDecisionAnnotationA;
+                //    }
+                //    else
+                //    {
+                //        trainingAnnotationText.text = training.postDecisionAnnotationB;
+                //    }
+                //    yield return StartCoroutine(WaitPrecise(3.0f));
+                //    trainingAnnotationText.gameObject.SetActive(false);
+                //}
+                //// --- Post-Decision Annotation ---
+                //trainingAnnotationText.gameObject.SetActive(true);
+                if (choice == "A")
+                {
+                    yield return ShowAnnotation(training.postDecisionAnnotationA, 3.0f);
+
+                    //    {
+                    //        trainingAnnotationText.text = training.postDecisionAnnotationA;
+                    //}
+                }
+                else
+                {
+                    yield return ShowAnnotation(training.postDecisionAnnotationB, 3.0f);
+
+                    HideAllAnnotationImages();
+                    //    
+                    //    trainingAnnotationText.text = training.postDecisionAnnotationB;
+                    //}
+                }
+                trialPanel.SetActive(false); // Hide the main trial panel
+
+                trainingFeedbackPanel.SetActive(true);
+
+                float selfPayoff, otherPayoff, totalPayoff;
+                if (choice == "A")
+                {
+                    selfPayoff = training.optionASelf;
+                    otherPayoff = training.optionAOther;
+                }
+                else
+                {
+                    selfPayoff = training.optionBSelf;
+                    otherPayoff = training.optionBOther;
+                }
+                totalPayoff = selfPayoff + otherPayoff;
+
+                string feedbackMessage = $"You chose Option {choice}.\n\nYour payoff is: {selfPayoff}\nThe other player's payoff is: {otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}";
+                trainingFeedbackText.text = feedbackMessage;
+
+                bool continuePressed = false;
+                trainingContinueButton.onClick.RemoveAllListeners();
+                trainingContinueButton.onClick.AddListener(() => { continuePressed = true; });
+
+                yield return new WaitUntil(() => continuePressed);
+
+                trainingFeedbackPanel.SetActive(false);
+                trialPanel.SetActive(true); // Re-activate for the next loop iteration
             }
-            else
-            {
-                trainingAnnotationText.text = training.postDecisionAnnotationB;
-            }
-            yield return StartCoroutine(WaitPrecise(3.0f)); // Show for 3 seconds
-            trainingAnnotationText.gameObject.SetActive(false);
-            trialPanel.SetActive(false); // Hide the main trial panel
 
-            // --- Feedback Page Phase ---
-            trainingFeedbackPanel.SetActive(true);
+            trialPanel.SetActive(false);
+            Debug.Log("--- Training Session Complete ---");
+        } }
 
-            // Perform calculation
-            float selfPayoff, otherPayoff, totalPayoff;
-            if (choice == "A")
-            {
-                selfPayoff = training.optionASelf;
-                otherPayoff = training.optionAOther;
-            }
-            else
-            {
-                selfPayoff = training.optionBSelf;
-                otherPayoff = training.optionBOther;
-            }
-            totalPayoff = selfPayoff + otherPayoff;
-
-            // Construct and display the feedback message
-            string feedbackMessage = $"You chose Option {choice}.\n\nYour payoff is: {selfPayoff}\nThe other player's payoff is: {otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}";
-            trainingFeedbackText.text = feedbackMessage;
-
-            // Wait for the user to click the "Continue" button
-            bool continuePressed = false;
-            trainingContinueButton.onClick.RemoveAllListeners();
-            trainingContinueButton.onClick.AddListener(() => { continuePressed = true; });
-
-            yield return new WaitUntil(() => continuePressed);
-
-            // Cleanup for the next trial
-            trainingFeedbackPanel.SetActive(false);
-            trialPanel.SetActive(true); // Re-activate for the next loop iteration
+    private IEnumerator ShowAnnotation(TrainingTrial.Annotation annotation, float duration)
+    {
+        Image targetImage = null;
+        switch (annotation.position)
+        {
+            case AnnotationPosition.Left:
+                targetImage = annotationImageLeft;
+                break;
+            case AnnotationPosition.Right:
+                targetImage = annotationImageRight;
+                break;
+            default: // Center
+                targetImage = annotationImageCenter;
+                break;
         }
 
-        // Final cleanup after all training is done
-        trialPanel.SetActive(false);
-        Debug.Log("--- Training Session Complete ---");
+        if (targetImage != null && annotation.image != null)
+        {
+            HideAllAnnotationImages();
+            targetImage.sprite = annotation.image;
+            targetImage.color = Color.white;
+            targetImage.gameObject.SetActive(true);
+            yield return StartCoroutine(WaitPrecise(duration));
+        }
+        else if (annotation.image == null)
+        {
+            Debug.LogWarning("ShowAnnotation called, but no sprite was assigned in the Inspector.");
+        }
     }
 
-
-    // Find this method in your existing code and modify it
-    public void StartGameInternal()
+    private void HideAllAnnotationImages()
     {
-        Debug.Log("StartGameInternal: Received signal to start the main trial loop. Redirecting to master flow.");
-        // This is now the entry point to the entire experiment, not just the trials.
-        StartExperimentFlow();
+        if (annotationImageCenter != null)
+        {
+            annotationImageCenter.gameObject.SetActive(false);
+            annotationImageCenter.sprite = null;
+        }
+        if (annotationImageLeft != null)
+        {
+            annotationImageLeft.gameObject.SetActive(false);
+            annotationImageLeft.sprite = null;
+        }
+        if (annotationImageRight != null)
+        {
+            annotationImageRight.gameObject.SetActive(false);
+            annotationImageRight.sprite = null;
+        }
     }
+
+    //// Find this method in your existing code and modify it
+    //public void StartGameInternal()
+    //{
+    //    Debug.Log("StartGameInternal: Received signal to start the main trial loop. Redirecting to master flow.");
+    //    // This is now the entry point to the entire experiment, not just the trials.
+    //    StartExperimentFlow();
+    //}
 
     IEnumerator RunAllTrials()
     {
@@ -739,14 +823,11 @@ public class GameManager : MonoBehaviour
 
         int eventCounter = 0;
 
-        // FIX: Use a single loop that strictly iterates from startEventIndex up to, but not including, totalEvents.
         for (int eventIndex = startEventIndex; eventIndex < totalEvents; eventIndex++)
         {
-            // Calculate the current run number (0-based) and the trial index within the run (0-based)
             int run = eventIndex / trialsPerRun;
             int trialInRun = eventIndex % trialsPerRun;
 
-            // Check for the start of a new run
             if (trialInRun == 0 && eventIndex > 0)
             {
                 Debug.Log($"---------- Starting Run {run + 1} / {totalRuns} ----------");
@@ -784,24 +865,16 @@ public class GameManager : MonoBehaviour
                 }
                 else
                 {
-                    // This new logic correctly handles the error and keeps the data synchronized.
                     Debug.LogError($"Adjusted trial index {adjustedIndex} is out of bounds for currentTrialList (size: {currentTrialList.Count}) at event index {eventIndex}. Skipping and logging as an error.");
-
-                    // Add a placeholder to the response list to keep counts correct.
                     trialResponses.Add("Error/Skipped_OutOfBounds");
-
-                    // Also log this skipped event to the final data file for a complete record.
                     DataLogger.LogTrial(eventCounter, "Error", "Skipped_OutOfBounds", 0f, new List<float>());
                 }
             }
             Debug.Log($"---------- Event {eventCounter} Finished ----------");
 
-            // Check for Inter-Run break condition: end of a run AND not the very last run
             if (trialInRun == trialsPerRun - 1 && run < totalRuns - 1)
             {
                 Debug.Log($"---------- Run {run + 1} Finished ----------");
-
-                // *** ROBUSTNESS EDIT: Flush data to file after each run ***
                 DataLogger.FlushData();
                 SaveExperimentState();
 
@@ -833,7 +906,6 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"---------- Run {totalRuns} Finished ----------");
 
-        // Ensure data is flushed after the very last run
         DataLogger.FlushData();
         SaveExperimentState();
 
@@ -869,23 +941,14 @@ public class GameManager : MonoBehaviour
                 string jsonState = System.IO.File.ReadAllText(filePath);
                 ExperimentState loadedState = JsonUtility.FromJson<ExperimentState>(jsonState);
 
-                // Sanity check
                 if (loadedState.participantId == pId)
                 {
-                    // Restore the state
                     this.currentTrialList = loadedState.shuffledTrialOrder;
                     this.attentionTestIndices = new HashSet<int>(loadedState.attentionTestEventIndices);
-
-                    // Add this line to restore the response history
                     this.trialResponses = new List<string>(loadedState.trialResponses);
-
-                    // This is the key part: set the starting index for the trial loop
                     this.startEventIndex = loadedState.lastCompletedEventIndex + 1;
                     this.totalTrials = this.currentTrialList.Count;
 
-                    // +++++++++++++++++++++++ START: ADD THIS NEW BLOCK +++++++++++++++++++++++
-                    // CRITICAL FIX: We must reload the attention tests from the loader,
-                    // as they are not saved in the JSON state file.
                     if (SignallingTaskData.SignallingTrialLoader.Instance != null && SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests != null)
                     {
                         this.attentionTests = new List<SignallingTaskData.AttentionTestData>(SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests);
@@ -896,9 +959,7 @@ public class GameManager : MonoBehaviour
                         Debug.LogError("AttemptToLoadState: Failed to load attention tests from SignallingTrialLoader. Attention tests will fail.");
                         this.attentionTests = new List<SignallingTaskData.AttentionTestData>(); // Ensure it's an empty list, not null
                     }
-                    // ++++++++++++++++++++++++ END: ADD THIS NEW BLOCK ++++++++++++++++++++++++
 
-                    // Re-create the helper dictionary for attention tests
                     attentionTestIndexToTestIndex.Clear();
                     List<int> sortedIndices = new List<int>(this.attentionTestIndices);
                     sortedIndices.Sort();
@@ -908,8 +969,6 @@ public class GameManager : MonoBehaviour
                     }
 
                     Debug.Log($"<color=green>State successfully loaded. Resuming from event number {this.startEventIndex + 1}.</color>");
-
-                    // Since we are resuming, we mark data as "loaded"
                     isDataLoaded = true;
                 }
                 else
@@ -937,8 +996,6 @@ public class GameManager : MonoBehaviour
                 adjustment++;
             }
         }
-        //int adjusted = eventIndex - adjustment;
-        // return adjusted;
         return eventIndex - adjustment; //new
     }
 
@@ -949,7 +1006,6 @@ public class GameManager : MonoBehaviour
         optionAButton?.gameObject.SetActive(true);
         optionBButton?.gameObject.SetActive(true);
 
-        // --- Phase 1: Onset ---
         selectionEnabled = false;
         decisionMade = false;
         trialPanel.SetActive(true);
@@ -961,7 +1017,10 @@ public class GameManager : MonoBehaviour
         {
             trialInfoText.text = string.Format(trialInfoFormatTask.Result, eventNumber, totalEventCount);
         }
-        else { trialInfoText.text = $"Event {eventNumber}/{totalEventCount}"; }
+        else
+        { 
+            trialInfoText.text = $"Event {eventNumber}/{totalEventCount}"; 
+        }
 
         if (barChartManager != null)
         {
@@ -979,17 +1038,14 @@ public class GameManager : MonoBehaviour
 
         SetButtonInteraction(false);
         Debug.Log($"RunTrial {eventNumber}: Onset Phase ({trialOnsetDuration}s)");
-        //yield return new WaitForSeconds(trialOnsetDuration);
-        yield return StartCoroutine(WaitPrecise(trialOnsetDuration)); //new
+        yield return StartCoroutine(WaitPrecise(trialOnsetDuration));
 
-        // --- Phase 2: Decision ---
         Debug.Log($"RunTrial {eventNumber}: Decision Phase Start (Waiting for input)");
-        yield return new WaitForEndOfFrame(); //new
+        yield return new WaitForEndOfFrame();
         SetupTrialButtons();
 
         yield return new WaitUntil(() => decisionMade);
-        float responseTime = Time.realtimeSinceStartup - decisionStartTime;//new
-        //float responseTime = Time.time - decisionStartTime; // Calculate RT
+        float responseTime = Time.realtimeSinceStartup - decisionStartTime;
         selectionEnabled = false;
 
         string messageChosen = "Error/LogMismatch";
@@ -1007,18 +1063,14 @@ public class GameManager : MonoBehaviour
         List<float> barData = new List<float> { trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other };
         DataLogger.LogTrial(eventNumber, currentTask.ToString(), messageChosen, responseTime, barData);
 
-        // --- Phase 3: Confirmation ---
         float confirmationDuration = Random.Range(decisionConfirmationMin, decisionConfirmationMax);
         Debug.Log($"RunTrial {eventNumber}: Confirmation Phase ({confirmationDuration:F2}s)");
         yield return StartCoroutine(WaitPrecise(confirmationDuration));//new
-        //yield return new WaitForSeconds(confirmationDuration);
 
-        // --- Phase 4: Fixation ---
         Debug.Log($"RunTrial {eventNumber}: Fixation Phase Start");
         trialPanel.SetActive(false);
         fixationPanel.SetActive(true);
         float fixationDuration = Random.Range(fixationMin, fixationMax);
-        //yield return new WaitForSeconds(fixationDuration);
         yield return StartCoroutine(WaitPrecise(fixationDuration));//new
         Debug.Log($"RunTrial {eventNumber}: Fixation Phase End ({fixationDuration:F2}s)");
         fixationPanel.SetActive(false);
@@ -1032,7 +1084,6 @@ public class GameManager : MonoBehaviour
         optionAButton?.gameObject.SetActive(true);
         optionBButton?.gameObject.SetActive(true);
 
-        // --- Phase 1: Onset ---
         selectionEnabled = false;
         decisionMade = false;
         trialPanel.SetActive(true);
@@ -1060,17 +1111,14 @@ public class GameManager : MonoBehaviour
 
         SetButtonInteraction(false);
         Debug.Log($"RunAttentionTest {eventNumber}: Onset Phase ({trialOnsetDuration}s)");
-        //yield return new WaitForSeconds(trialOnsetDuration);
         yield return StartCoroutine(WaitPrecise(trialOnsetDuration));//new
 
-        // --- Phase 2: Decision ---
         Debug.Log($"RunAttentionTest {eventNumber}: Decision Phase Start (Waiting for input)");
         yield return new WaitForEndOfFrame();
         SetupTrialButtons();
 
         yield return new WaitUntil(() => decisionMade);
         float responseTime = Time.realtimeSinceStartup - decisionStartTime;
-        //float responseTime = Time.time - decisionStartTime;
         selectionEnabled = false;
 
         string response = "Error/LogMismatch";
@@ -1088,19 +1136,15 @@ public class GameManager : MonoBehaviour
 
         DataLogger.LogAttentionTest(eventNumber, response, responseTime);
 
-        // --- Phase 3: Confirmation ---
         float confirmationDuration = Random.Range(decisionConfirmationMin, decisionConfirmationMax);
         Debug.Log($"RunAttentionTest {eventNumber}: Confirmation Phase ({confirmationDuration:F2}s)");
         yield return StartCoroutine(WaitPrecise(confirmationDuration));
-        //yield return new WaitForSeconds(confirmationDuration);
 
-        // --- Phase 4: Fixation ---
         Debug.Log($"RunAttentionTest {eventNumber}: Fixation Phase Start");
         trialPanel.SetActive(false);
         fixationPanel.SetActive(true);
         float fixationDuration = Random.Range(fixationMin, fixationMax);
         yield return StartCoroutine(WaitPrecise(fixationDuration));
-        //yield return new WaitForSeconds(fixationDuration);
         Debug.Log($"RunAttentionTest {eventNumber}: Fixation Phase End ({fixationDuration:F2}s)");
         fixationPanel.SetActive(false);
         Debug.Log($"RunAttentionTest {eventNumber}: Complete.");
@@ -1128,8 +1172,7 @@ public class GameManager : MonoBehaviour
         selectionEnabled = true;
         SetButtonInteraction(true);
         decisionMade = false;
-        decisionStartTime = Time.realtimeSinceStartup; // Use precise clock
-        //decisionStartTime = Time.time;
+        decisionStartTime = Time.realtimeSinceStartup;
         optionAButton?.onClick.RemoveAllListeners();
         optionBButton?.onClick.RemoveAllListeners();
         optionAButton?.onClick.AddListener(() => OnDecisionMade("A"));
@@ -1228,15 +1271,11 @@ public class GameManager : MonoBehaviour
             Button endButton = endExperimentButton.GetComponent<Button>();
             if (endButton != null) endButton.interactable = false;
         }
-        //new
+
         DataLogger.SaveData(participantId, currentTask.ToString(), currentSeries);
         Debug.Log($"EndExperiment: Final data flush requested.");
         DeleteStateFile(); // <-- ADD THIS LINE
 
-        //end new
-
-
-        // --- 2. Display Final Message ---
         if (instructionPanel != null && instructionText != null)
         {
             instructionPanel.SetActive(true);
@@ -1267,18 +1306,11 @@ public class GameManager : MonoBehaviour
         trialPanel?.SetActive(false);
         fixationPanel?.SetActive(false);
         instructionPanel?.SetActive(false);
-        //new
+
         DataLogger.SaveData(participantId, currentTask.ToString(), currentSeries);
         Debug.Log($"SaveAndQuitCoroutine: Final data flush requested.");
         yield return StartCoroutine(WaitPrecise(2.0f));
-        //end new
-        //string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss"); // Underscore for readability
-        //// *** Use Participant ID in filename ***
-        //string filename = $"PID-{participantId}_Task-{currentTask}_Series-{currentSeries}_{timestamp}_AutoEnd-{reason}.csv";
-        //DataLogger.SaveData(filename);
-        //Debug.Log($"SaveAndQuitCoroutine: Data save requested to '{filename}'.");
-        //// Optional short delay before quitting
-        //yield return new WaitForSecondsRealtime(2.0f);
+
         CloseApplication();
     }
 
@@ -1287,7 +1319,6 @@ public class GameManager : MonoBehaviour
         if (delay < 0) delay = 0;
         Debug.Log($"DelayedClose: Waiting for {delay} seconds before quitting.");
         yield return StartCoroutine(WaitPrecise(delay));//new
-        //yield return new WaitForSecondsRealtime(delay);
         CloseApplication();
     }
 
@@ -1304,17 +1335,13 @@ public class GameManager : MonoBehaviour
         Application.Quit();
 #endif
     }
-    //new
+
     IEnumerator WaitPrecise(float duration)
     {
         float startTime = Time.realtimeSinceStartup;
         while (Time.realtimeSinceStartup < startTime + duration)
         {
             yield return null;
-            //        //end new
-            //        // --- UI Helper Methods ---
-
-            //        // Sets the displayed text on a TMP_Text component.
         }
     }
 
@@ -1323,10 +1350,9 @@ public class GameManager : MonoBehaviour
         if (textComponent != null)
         {
             textComponent.text = text;
-        } // else { Debug.LogWarning($"Attempted to set text on a null TMP_Text component. Text was: '{text}'"); } // Reduce log spam
+        } 
     }
 
-    // Sets the transparency (alpha) of an Image component.
     void SetButtonTransparency(Image buttonImage, float alpha)
     {
         if (buttonImage != null)
@@ -1334,10 +1360,9 @@ public class GameManager : MonoBehaviour
             Color currentColor = buttonImage.color;
             currentColor.a = Mathf.Clamp01(alpha);
             buttonImage.color = currentColor;
-        } // else { Debug.LogWarning("Attempted to set transparency on a null Image component."); } // Reduce log spam
+        } 
     }
 
-    // Randomly shuffles a list using the Fisher-Yates algorithm.
     private void ShuffleTrials(List<SignallingTaskData.TrialData> list)
     {
         if (list == null || list.Count <= 1) return;
@@ -1348,7 +1373,7 @@ public class GameManager : MonoBehaviour
         {
             n--;
             int k = rng.Next(n + 1);
-            (list[k], list[n]) = (list[n], list[k]); // Use tuple swap
+            (list[k], list[n]) = (list[n], list[k]);
         }
     }
     void InsertAttentionTests()
@@ -1385,10 +1410,6 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // --- CORRECTED, ROBUST LOGIC ---
-
-        // 1. Define the pool of possible event indices where a test can be placed.
-        // We will prevent tests from appearing in the first 2 slots for better distribution.
         int minStartIndex = 2;
         if (totalEvents <= minStartIndex)
         {
@@ -1397,16 +1418,12 @@ public class GameManager : MonoBehaviour
         }
         List<int> possibleIndices = Enumerable.Range(minStartIndex, totalEvents - minStartIndex).ToList();
 
-        // 2. Shuffle the list of possible indices randomly.
         System.Random rng = new System.Random();
         possibleIndices = possibleIndices.OrderBy(x => rng.Next()).ToList();
 
-        // 3. Take the first 'numAttentionTests' indices from the shuffled list.
-        // This guarantees we get unique, random positions.
         List<int> chosenIndices = possibleIndices.Take(numAttentionTests).ToList();
-        chosenIndices.Sort(); // Sort them to place tests in chronological order.
+        chosenIndices.Sort();
 
-        // 4. Populate the lookup collections correctly.
         for (int i = 0; i < chosenIndices.Count; i++)
         {
             int eventIndex = chosenIndices[i];

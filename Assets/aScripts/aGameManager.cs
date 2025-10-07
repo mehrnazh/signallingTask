@@ -4,12 +4,9 @@
 //using UnityEngine.UI;
 //using TMPro;
 //using UnityEngine.EventSystems;
-//using UnityEngine.Localization;
 //using UnityEngine.Localization.Settings;
-//using UnityEngine.Localization.Tables;
 //using System.Threading.Tasks;
 //using System.Linq;
-//using SignallingTaskData;
 
 //// Enum to distinguish between task types.
 //public enum TaskType { Deception, Control }
@@ -38,16 +35,68 @@
 
 //    [Header("Task Settings")]
 //    public TaskType currentTask = TaskType.Deception;
-//    public int currentSeries = 1; // Added: To select instruction series (1 or 2)
-//    public int totalTrials = 5;  // Total number of *regular* trials (updated from loaded data)
-//    public int trialsPerRun = 1;  // Number of *events* (trials + tests) per run
+//    public int currentSeries = 1;
+//    public int totalTrials = 5;
+//    public int trialsPerRun = 1;
 //    public float trialOnsetDuration = 2f;
 //    public float decisionConfirmationMin = 2f;
 //    public float decisionConfirmationMax = 4f;
 //    public float fixationMin = 2f;
 //    public float fixationMax = 4f;
 //    public float interRunInterval = 10f;
-//    public float closeDelay = 10f; // Delay before closing after final message
+//    public float closeDelay = 10f;
+
+//    [Header("Training Annotation Images")]
+//    public Image annotationImageCenter;
+//    public Image annotationImageLeft;
+//    public Image annotationImageRight;
+
+//    [Header("Training Feedback UI")]
+//    public GameObject trainingFeedbackPanel;
+//    public Button trainingContinueButton;
+//    public TMP_Text trainingFeedbackText;
+//    public FeedbackManager feedbackManager;
+
+//    // Enum for annotation positions
+//    public enum AnnotationPosition { Center, Left, Right }
+
+//    // Struct to define a single training trial with images
+//    [System.Serializable]
+//    public struct TrainingTrial
+//    {
+//        [System.Serializable]
+//        public struct Annotation
+//        {
+//            public Sprite image;
+//            public AnnotationPosition position;
+//        }
+
+//        public float optionASelf;
+//        public float optionAOther;
+//        public float optionBSelf;
+//        public float optionBOther;
+
+//        [Header("Annotation Sequence")]
+//        public Annotation annotation1;
+//        public Annotation annotation2;
+//        public Annotation annotation3;
+//        public Annotation annotation4;
+//        public Annotation annotation5;
+
+//        [Header("Post-Decision Annotations")]
+//        public Annotation postDecisionAnnotationA;
+//        public Annotation postDecisionAnnotationB;
+
+//        [Header("Correct Answer")]
+//        public string correctAnswer; // "A" or "B"
+//    }
+
+//    [Header("Training Session Data")]
+//    public List<TrainingTrial> trainingTrials;
+
+//    // Enum and variable to manage the experiment's master flow
+//    private enum ExperimentPhase { Setup, InstructionsPart1, Training, InstructionsPart2, MainTrials, Finished }
+//    private ExperimentPhase currentPhase = ExperimentPhase.Setup;
 
 //    // Cached components
 //    private Image optionAButtonImage;
@@ -59,26 +108,29 @@
 //    private LegendManager legendManager;
 
 //    // Optimized data structures
-//    private List<SignallingTaskData.TrialData> currentTrialList; // Holds the shuffled regular trials
-//    private List<string> trialResponses = new List<string>(); // Stores response ("A" or "B") for each event (trial or test) in order
-//    private List<SignallingTaskData.AttentionTestData> attentionTests = new List<SignallingTaskData.AttentionTestData>(); // Holds loaded attention tests
-//    private HashSet<int> attentionTestIndices = new HashSet<int>(); // Stores the 0-based *event index* where attention tests occur
-//    private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>(); // Maps event index to index in attentionTests list
+//    private List<SignallingTaskData.TrialData> currentTrialList;
+//    private List<string> trialResponses = new List<string>();
+//    private List<SignallingTaskData.AttentionTestData> attentionTests = new List<SignallingTaskData.AttentionTestData>();
+//    private HashSet<int> attentionTestIndices = new HashSet<int>();
+//    private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>();
 
-//    private bool decisionMade = false; // Flag: true when participant makes choice in current trial/test
-//    private bool selectionEnabled = false; // Flag: true when buttons/keys are active for input
-//    private float decisionStartTime; // Time.realtimeSinceStartup when decision phase starts
+//    private bool decisionMade = false;
+//    private bool selectionEnabled = false;
+//    private float decisionStartTime;
 
-//    // Flag to ensure GameManager setup (including localization AND data loading) is complete
 //    private bool isInitialized = false;
-//    private bool isDataLoaded = false; // New flag specifically for data loading
-//    private bool hasReceivedOptions = false; // New flag: Ensures options are set before init
+//    private bool isDataLoaded = false;
+//    private bool hasReceivedOptions = false;
 
-//    // Store participant ID
-//    private string participantId = "DEFAULT_ID"; // Default value
+//    private string participantId = "DEFAULT_ID";
+//    private const string UILocalizationTable = "UI";
+//    private int startEventIndex = 0;
 
-//    // Localization table reference
-//    private const string UILocalizationTable = "UI"; // Your table name
+//    private string GetStateFilePath(string pId, string task, int ser)
+//    {
+//        string filename = $"PID-{pId}_Task-{task}_Series-{ser}_resume.json";
+//        return System.IO.Path.Combine(Application.persistentDataPath, filename);
+//    }
 
 //    void Awake()
 //    {
@@ -86,11 +138,9 @@
 //        if (Instance == null)
 //        {
 //            Instance = this;
-//            DontDestroyOnLoad(gameObject);
-
+//            DontDestroyOnload(gameObject);
 //            DataLogger.Initialize();
 //            Debug.Log("GameManager Awake: DataLogger Initialized.");
-
 //            InitializeComponents();
 //            Debug.Log("GameManager Awake: Singleton set. Waiting for options from SetupManager.");
 //        }
@@ -104,6 +154,8 @@
 
 //    public void StartInitializationWithOptions(TaskType task, int series, string langCode, string participantId)
 //    {
+//        DataLogger.Reset();
+
 //        if (hasReceivedOptions)
 //        {
 //            Debug.LogWarning("GameManager: StartInitializationWithOptions called more than once!");
@@ -116,6 +168,8 @@
 //        this.currentSeries = series;
 //        this.participantId = participantId;
 
+//        DataLogger.SetFilePath(participantId, task.ToString(), series);
+//        AttemptToLoadState(participantId, task, series);
 //        hasReceivedOptions = true;
 //        StartCoroutine(InitializeLocalizationAndUI(langCode));
 //    }
@@ -130,7 +184,10 @@
 //            yield break;
 //        }
 
-//        StartCoroutine(LoadDataSequentially());
+//        if (!isDataLoaded)
+//        {
+//            StartCoroutine(LoadDataSequentially());
+//        }
 
 //        yield return LocalizationSettings.InitializationOperation;
 //        if (!LocalizationSettings.HasSettings || LocalizationSettings.InitializationOperation.Status != UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
@@ -165,26 +222,20 @@
 //        {
 //            if (LocalizationSettings.SelectedLocale != null)
 //            {
-//                string langCode = LocalizationSettings.SelectedLocale.Identifier.Code;
-//                Debug.Log($"InitializeLocalizationAndUI: Initializing instructions via InstructionManager for Series: {currentSeries}, Task: {currentTask}, Lang: {langCode}");
-
-//                instructionManager.gameObject.SetActive(true);
-//                instructionManager.InitializeInstructions(currentSeries, currentTask, langCode, this);
-//                instructionPanel?.SetActive(true);
-//                Debug.Log("InitializeLocalizationAndUI: Handed control to InstructionManager. Waiting for completion signal.");
-
+//                Debug.Log("InitializeLocalizationAndUI: Initialization complete. Ready to start master flow.");
+//                StartExperimentFlow();
 //            }
 //            else
 //            {
 //                Debug.LogError("InitializeLocalizationAndUI: SelectedLocale became null after setting! Cannot init instructions.");
-//                StartGameInternal();
+//                StartExperimentFlow();
 //            }
 //        }
 //        else
 //        {
-//            Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions phase.");
+//            Debug.LogWarning("InitializeLocalizationAndUI: InstructionManager reference missing. Skipping instructions and training phase.");
 //            instructionPanel?.SetActive(false);
-//            StartGameInternal();
+//            StartExperimentFlow();
 //        }
 //    }
 
@@ -290,6 +341,37 @@
 //        SetButtonInteraction(false);
 //    }
 
+//    private void SaveExperimentState()
+//    {
+//        int lastCompletedIndex = trialResponses.Count - 1;
+
+//        if (lastCompletedIndex < 0) return;
+
+//        ExperimentState state = new ExperimentState
+//        {
+//            participantId = this.participantId,
+//            taskType = this.currentTask.ToString(),
+//            series = this.currentSeries,
+//            lastCompletedEventIndex = lastCompletedIndex,
+//            shuffledTrialOrder = this.currentTrialList,
+//            attentionTestEventIndices = new List<int>(this.attentionTestIndices),
+//            trialResponses = new List<string>(this.trialResponses)
+//        };
+
+//        string jsonState = JsonUtility.ToJson(state, true);
+//        string filePath = GetStateFilePath(this.participantId, this.currentTask.ToString(), this.currentSeries);
+
+//        try
+//        {
+//            System.IO.File.WriteAllText(filePath, jsonState);
+//            Debug.Log($"<color=green>Experiment state saved successfully to {filePath}</color>");
+//        }
+//        catch (System.Exception ex)
+//        {
+//            Debug.LogError($"Failed to save experiment state: {ex.Message}");
+//        }
+//    }
+
 //    private void LoadAndShuffleTrials()
 //    {
 //        if (SignallingTaskData.SignallingTrialLoader.Instance == null)
@@ -303,50 +385,18 @@
 //        Debug.Log($"LoadAndShuffleTrials: Loading trials for TaskType: {currentTask} using SignallingTrialLoader.Instance");
 //        if (currentTask == TaskType.Deception)
 //        {
-//            if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-//            {
-//                currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-//                Debug.Log($"Loaded {currentTrialList.Count} Deception trials.");
-//            }
-//            else
-//            {
-//                Debug.LogError("SignallingTrialLoader.Instance.DeceptionTrials is null or empty! Cannot proceed.");
-//                currentTrialList = new List<SignallingTaskData.TrialData>();
-//            }
+//            currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
 //        }
 //        else
 //        {
-//            if (SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials.Count > 0)
-//            {
-//                currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
-//                Debug.Log($"Loaded {currentTrialList.Count} Control trials.");
-//            }
-//            else
-//            {
-//                Debug.LogWarning("SignallingTrialLoader.Instance.ControlTrials is null or empty. Using Deception trials as fallback for Control task.");
-//                if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-//                {
-//                    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-//                }
-//                else
-//                {
-//                    Debug.LogError("Fallback failed: SignallingTrialLoader.Instance.DeceptionTrials is also null or empty! Cannot proceed.");
-//                    currentTrialList = new List<SignallingTaskData.TrialData>();
-//                }
-//            }
+//            currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
 //        }
 
 //        ShuffleTrials(currentTrialList);
 
-//        // 💡 NEW CODE: Define the maximum number of trials you want to run.
-//        // You can use the 'totalTrials' variable, or hard-code a value like 5.
-//        // We'll use the 'totalTrials' member variable (defaulted to 5, set in Inspector).
 //        int maxTrialsToRun = this.totalTrials;
-
-//        // Ensure the list is not null and has items before limiting
 //        if (currentTrialList != null && currentTrialList.Count > maxTrialsToRun)
 //        {
-//            // Limit the list to 'maxTrialsToRun' trials after they have been shuffled.
 //            currentTrialList = currentTrialList.Take(maxTrialsToRun).ToList();
 //            Debug.Log($"Limited total regular trials from initial load to: {currentTrialList.Count}");
 //        }
@@ -409,30 +459,214 @@
 
 //    public void StartGameInternal()
 //    {
-//        Debug.Log("StartGameInternal: Received signal to start the main trial loop.");
-//        if (instructionPanel != null)
-//        {
-//            instructionPanel.SetActive(false);
-//            Debug.Log("StartGameInternal: Instruction Panel hidden.");
-//        }
-//        else
-//        {
-//            Debug.LogWarning("StartGameInternal: InstructionPanel reference is null, cannot hide it.");
-//        }
+//        Debug.Log("StartGameInternal: Received signal to start the main trial loop. Redirecting to master flow.");
+//        StartExperimentFlow();
+//    }
+
+//    public void StartExperimentFlow()
+//    {
+//        Debug.Log("StartExperimentFlow: Received signal to start the master experiment flow.");
+//        if (instructionPanel != null) instructionPanel.SetActive(false);
 //        if (instructionManager != null)
 //        {
+//            instructionManager.Initialize(this);
 //            instructionManager.gameObject.SetActive(false);
-//            Debug.Log("StartGameInternal: InstructionManager GameObject deactivated.");
 //        }
-//        StartCoroutine(RunAllTrials());
+
+//        currentPhase = ExperimentPhase.InstructionsPart1;
+//        StartCoroutine(RunMasterFlow());
 //    }
+
+//    public void OnInstructionSetCompleted()
+//    {
+//        Debug.Log($"OnInstructionSetCompleted: Finished phase {currentPhase}.");
+//        currentPhase++;
+//        StartCoroutine(RunMasterFlow());
+//    }
+
+//    IEnumerator RunMasterFlow()
+//    {
+//        Debug.Log($"RunMasterFlow: Executing phase {currentPhase}.");
+
+//        switch (currentPhase)
+//        {
+//            case ExperimentPhase.InstructionsPart1:
+//                instructionPanel.SetActive(true);
+//                instructionManager.gameObject.SetActive(true);
+//                string langCode1 = LocalizationSettings.SelectedLocale.Identifier.Code;
+//                Sprite[] part1Sprites = instructionManager.GetSpriteSet(1, currentSeries, currentTask, langCode1);
+//                instructionManager.BeginInstructionSet(part1Sprites);
+//                break;
+
+//            case ExperimentPhase.Training:
+//                instructionPanel.SetActive(false);
+//                yield return StartCoroutine(RunTrainingSession());
+//                OnInstructionSetCompleted();
+//                break;
+
+//            case ExperimentPhase.InstructionsPart2:
+//                instructionPanel.SetActive(true);
+//                instructionManager.gameObject.SetActive(true);
+//                string langCode2 = LocalizationSettings.SelectedLocale.Identifier.Code;
+//                Sprite[] part2Sprites = instructionManager.GetSpriteSet(2, currentSeries, currentTask, langCode2);
+//                instructionManager.BeginInstructionSet(part2Sprites);
+//                break;
+
+//            case ExperimentPhase.MainTrials:
+//                instructionPanel.SetActive(false);
+//                yield return StartCoroutine(RunAllTrials());
+//                break;
+
+//            case ExperimentPhase.Finished:
+//                Debug.Log("Master flow finished.");
+//                break;
+//        }
+//    }
+
+//    IEnumerator RunTrainingSession()
+//    {
+//        Debug.Log("--- Starting Advanced Training Session ---");
+
+//        trialPanel.SetActive(true);
+//        trialInfoText.text = "Training";
+
+//        for (int i = 0; i < trainingTrials.Count; i++)
+//        {
+//            TrainingTrial training = trainingTrials[i];
+//            Debug.Log($"Starting training trial {i + 1}/{trainingTrials.Count}");
+
+//            barChartManager.CreateBarChart(training.optionASelf, training.optionAOther, training.optionBSelf, training.optionBOther);
+
+//            if (i == 0)
+//            {
+//                yield return ShowAnnotation(training.annotation1, 2.0f);
+//                yield return ShowAnnotation(training.annotation2, 2.0f);
+//                HideAllAnnotationImages();
+//                yield return StartCoroutine(WaitPrecise(0.5f));
+
+//                yield return ShowAnnotation(training.annotation3, 2.0f);
+//                yield return ShowAnnotation(training.annotation4, 2.0f);
+//                HideAllAnnotationImages();
+//                yield return StartCoroutine(WaitPrecise(0.5f));
+
+//                yield return ShowAnnotation(training.annotation5, 2.0f);
+//                HideAllAnnotationImages();
+//            }
+
+//            Debug.Log("Training: Activating decision buttons.");
+//            optionAButton.gameObject.SetActive(true);
+//            optionBButton.gameObject.SetActive(true);
+//            SetButtonInteraction(true);
+
+//            var taskA = GetLocalizedStringAsync(UILocalizationTable, "option_a_label");
+//            var taskB = GetLocalizedStringAsync(UILocalizationTable, "option_b_label");
+//            yield return new WaitUntil(() => taskA.IsCompleted && taskB.IsCompleted);
+//            SetButtonText(optionAButtonText, taskA.Result);
+//            SetButtonText(optionBButtonText, taskB.Result);
+
+//            string choice = "";
+//            bool decisionMadeThisTrial = false;
+//            optionAButton.onClick.RemoveAllListeners();
+//            optionBButton.onClick.RemoveAllListeners();
+//            optionAButton.onClick.AddListener(() => { choice = "A"; decisionMadeThisTrial = true; });
+//            optionBButton.onClick.AddListener(() => { choice = "B"; decisionMadeThisTrial = true; });
+
+//            yield return new WaitUntil(() => decisionMadeThisTrial);
+//            Debug.Log($"Training: Participant chose option {choice}.");
+//            SetButtonInteraction(false);
+
+//            if (i == 0)
+//            {
+//                if (choice == "A")
+//                    yield return ShowAnnotation(training.postDecisionAnnotationA, 3.0f);
+//                else
+//                    yield return ShowAnnotation(training.postDecisionAnnotationB, 3.0f);
+
+//                HideAllAnnotationImages();
+//            }
+
+//            trialPanel.SetActive(false);
+
+//            trainingFeedbackPanel.SetActive(true);
+
+//            float selfPayoff, otherPayoff, totalPayoff;
+//            if (choice == "A") { selfPayoff = training.optionASelf; otherPayoff = training.optionAOther; }
+//            else { selfPayoff = training.optionBSelf; otherPayoff = training.optionBOther; }
+//            totalPayoff = selfPayoff + otherPayoff;
+
+//            string feedbackMessage = $"You chose Option {choice}.\n\nYour payoff is: {selfPayoff}\nThe other player's payoff is: {otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}";
+//            trainingFeedbackText.text = feedbackMessage;
+
+//            bool continuePressed = false;
+//            trainingContinueButton.onClick.RemoveAllListeners();
+//            trainingContinueButton.onClick.AddListener(() => { continuePressed = true; });
+
+//            yield return new WaitUntil(() => continuePressed);
+
+//            trainingFeedbackPanel.SetActive(false);
+//            trialPanel.SetActive(true);
+//        }
+
+//        trialPanel.SetActive(false);
+//        Debug.Log("--- Training Session Complete ---");
+//    }
+
+//    private IEnumerator ShowAnnotation(TrainingTrial.Annotation annotation, float duration)
+//    {
+//        Image targetImage = null;
+//        switch (annotation.position)
+//        {
+//            case AnnotationPosition.Left:
+//                targetImage = annotationImageLeft;
+//                break;
+//            case AnnotationPosition.Right:
+//                targetImage = annotationImageRight;
+//                break;
+//            default: // Center
+//                targetImage = annotationImageCenter;
+//                break;
+//        }
+
+//        if (targetImage != null && annotation.image != null)
+//        {
+//            HideAllAnnotationImages();
+//            targetImage.sprite = annotation.image;
+//            targetImage.color = Color.white;
+//            targetImage.gameObject.SetActive(true);
+//            yield return StartCoroutine(WaitPrecise(duration));
+//        }
+//        else if (annotation.image == null)
+//        {
+//            Debug.LogWarning("ShowAnnotation called, but no sprite was assigned in the Inspector.");
+//        }
+//    }
+
+//    private void HideAllAnnotationImages()
+//    {
+//        if (annotationImageCenter != null)
+//        {
+//            annotationImageCenter.gameObject.SetActive(false);
+//            annotationImageCenter.sprite = null;
+//        }
+//        if (annotationImageLeft != null)
+//        {
+//            annotationImageLeft.gameObject.SetActive(false);
+//            annotationImageLeft.sprite = null;
+//        }
+//        if (annotationImageRight != null)
+//        {
+//            annotationImageRight.gameObject.SetActive(false);
+//            annotationImageRight.sprite = null;
+//        }
+//    }
+
 
 //    IEnumerator RunAllTrials()
 //    {
 //        Debug.Log("RunAllTrials: Starting experiment run sequence.");
 //        int actualRegularTrials = currentTrialList?.Count ?? 0;
 //        int actualAttentionTests = attentionTests?.Count ?? 0;
-//        int totalEvents = actualRegularTrials + actualAttentionTests; // This is the total number of items to run
+//        int totalEvents = actualRegularTrials + actualAttentionTests;
 
 //        if (totalEvents == 0)
 //        {
@@ -451,19 +685,17 @@
 //            trialsPerRun = totalEvents;
 //        }
 //        int totalRuns = (trialsPerRun > 0) ? Mathf.CeilToInt((float)totalEvents / trialsPerRun) : 1;
+
 //        Debug.Log($"RunAllTrials: {totalEvents} total events ({actualRegularTrials} regular, {actualAttentionTests} attention). {trialsPerRun} events/run. {totalRuns} runs total.");
 
 //        int eventCounter = 0;
 
-//        // FIX: Use a single loop that strictly iterates from 0 up to, but not including, totalEvents.
-//        for (int eventIndex = 0; eventIndex < totalEvents; eventIndex++)
+//        for (int eventIndex = startEventIndex; eventIndex < totalEvents; eventIndex++)
 //        {
-//            // Calculate the current run number (0-based) and the trial index within the run (0-based)
 //            int run = eventIndex / trialsPerRun;
 //            int trialInRun = eventIndex % trialsPerRun;
 
-//            // Check for the start of a new run
-//            if (trialInRun == 0)
+//            if (trialInRun == 0 && eventIndex > 0)
 //            {
 //                Debug.Log($"---------- Starting Run {run + 1} / {totalRuns} ----------");
 //            }
@@ -500,22 +732,18 @@
 //                }
 //                else
 //                {
-//                    Debug.LogError($"Adjusted trial index {adjustedIndex} is out of bounds (0 to {currentTrialList.Count - 1}) for event index {eventIndex}. Skipping event.");
-//                    if (trialResponses.Count == eventCounter - 1)
-//                        trialResponses.Add("Error/Skipped");
-//                    else
-//                        Debug.LogError($"Could not add Error/Skipped response, response count ({trialResponses.Count}) != expected ({eventCounter - 1})");
+//                    Debug.LogError($"Adjusted trial index {adjustedIndex} is out of bounds for currentTrialList (size: {currentTrialList.Count}) at event index {eventIndex}. Skipping and logging as an error.");
+//                    trialResponses.Add("Error/Skipped_OutOfBounds");
+//                    DataLogger.LogTrial(eventCounter, "Error", "Skipped_OutOfBounds", 0f, new List<float>());
 //                }
 //            }
 //            Debug.Log($"---------- Event {eventCounter} Finished ----------");
 
-//            // Check for Inter-Run break condition: end of a run AND not the very last run
 //            if (trialInRun == trialsPerRun - 1 && run < totalRuns - 1)
 //            {
 //                Debug.Log($"---------- Run {run + 1} Finished ----------");
-
-//                // *** ROBUSTNESS EDIT: Flush data to file after each run ***
 //                DataLogger.FlushData();
+//                SaveExperimentState();
 
 //                if (interRunPanel != null && interRunInterval > 0)
 //                {
@@ -531,7 +759,7 @@
 //                    interRunPanel.SetActive(true);
 //                    trialPanel?.SetActive(false);
 //                    fixationPanel?.SetActive(false);
-//                    yield return StartCoroutine(WaitPrecise(interRunInterval)); // Use precise wait
+//                    yield return StartCoroutine(WaitPrecise(interRunInterval));
 //                    interRunPanel.SetActive(false);
 //                    Debug.Log("Inter-Run Break Finished.");
 //                }
@@ -543,14 +771,87 @@
 //            }
 //        }
 
-//        // This is the correct place for the final log and cleanup after the loop completes
 //        Debug.Log($"---------- Run {totalRuns} Finished ----------");
 
-//        // Ensure data is flushed after the very last run
 //        DataLogger.FlushData();
+//        SaveExperimentState();
 
 //        Debug.Log("RunAllTrials: All runs completed.");
 //        EndTrials();
+//    }
+
+//    private void DeleteStateFile()
+//    {
+//        string filePath = GetStateFilePath(this.participantId, this.currentTask.ToString(), this.currentSeries);
+//        if (System.IO.File.Exists(filePath))
+//        {
+//            try
+//            {
+//                System.IO.File.Delete(filePath);
+//                Debug.Log("Experiment completed. Resume file deleted.");
+//            }
+//            catch (System.Exception ex)
+//            {
+//                Debug.LogWarning($"Could not delete resume file: {ex.Message}");
+//            }
+//        }
+//    }
+
+//    private void AttemptToLoadState(string pId, TaskType task, int ser)
+//    {
+//        string filePath = GetStateFilePath(pId, task.ToString(), ser);
+//        if (System.IO.File.Exists(filePath))
+//        {
+//            Debug.Log($"<color=orange>Resume file found at {filePath}. Attempting to load state.</color>");
+//            try
+//            {
+//                string jsonState = System.IO.File.ReadAllText(filePath);
+//                ExperimentState loadedState = JsonUtility.FromJson<ExperimentState>(jsonState);
+
+//                if (loadedState.participantId == pId)
+//                {
+//                    this.currentTrialList = loadedState.shuffledTrialOrder;
+//                    this.attentionTestIndices = new HashSet<int>(loadedState.attentionTestEventIndices);
+//                    this.trialResponses = new List<string>(loadedState.trialResponses);
+//                    this.startEventIndex = loadedState.lastCompletedEventIndex + 1;
+//                    this.totalTrials = this.currentTrialList.Count;
+
+//                    if (SignallingTaskData.SignallingTrialLoader.Instance != null && SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests != null)
+//                    {
+//                        this.attentionTests = new List<SignallingTaskData.AttentionTestData>(SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests);
+//                        Debug.Log($"Loaded {this.attentionTests.Count} attention tests from SignallingTrialLoader during resume.");
+//                    }
+//                    else
+//                    {
+//                        Debug.LogError("AttemptToLoadState: Failed to load attention tests from SignallingTrialLoader. Attention tests will fail.");
+//                        this.attentionTests = new List<SignallingTaskData.AttentionTestData>();
+//                    }
+
+//                    attentionTestIndexToTestIndex.Clear();
+//                    List<int> sortedIndices = new List<int>(this.attentionTestIndices);
+//                    sortedIndices.Sort();
+//                    for (int i = 0; i < sortedIndices.Count; i++)
+//                    {
+//                        attentionTestIndexToTestIndex[sortedIndices[i]] = i;
+//                    }
+
+//                    Debug.Log($"<color=green>State successfully loaded. Resuming from event number {this.startEventIndex + 1}.</color>");
+//                    isDataLoaded = true;
+//                }
+//                else
+//                {
+//                    Debug.LogWarning("Found resume file, but participant ID did not match. Starting a new session.");
+//                }
+//            }
+//            catch (System.Exception ex)
+//            {
+//                Debug.LogError($"Error loading experiment state, a new session will be started. Error: {ex.Message}");
+//            }
+//        }
+//        else
+//        {
+//            Debug.Log("No resume file found. Starting a new session.");
+//        }
 //    }
 //    private int GetAdjustedTrialIndex(int eventIndex)
 //    {
@@ -572,7 +873,6 @@
 //        optionAButton?.gameObject.SetActive(true);
 //        optionBButton?.gameObject.SetActive(true);
 
-//        // --- Phase 1: Onset ---
 //        selectionEnabled = false;
 //        decisionMade = false;
 //        trialPanel.SetActive(true);
@@ -604,7 +904,6 @@
 //        Debug.Log($"RunTrial {eventNumber}: Onset Phase ({trialOnsetDuration}s)");
 //        yield return StartCoroutine(WaitPrecise(trialOnsetDuration));
 
-//        // --- Phase 2: Decision ---
 //        Debug.Log($"RunTrial {eventNumber}: Decision Phase Start (Waiting for input)");
 //        yield return new WaitForEndOfFrame();
 //        SetupTrialButtons();
@@ -628,12 +927,10 @@
 //        List<float> barData = new List<float> { trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other };
 //        DataLogger.LogTrial(eventNumber, currentTask.ToString(), messageChosen, responseTime, barData);
 
-//        // --- Phase 3: Confirmation ---
 //        float confirmationDuration = Random.Range(decisionConfirmationMin, decisionConfirmationMax);
 //        Debug.Log($"RunTrial {eventNumber}: Confirmation Phase ({confirmationDuration:F2}s)");
 //        yield return StartCoroutine(WaitPrecise(confirmationDuration));
 
-//        // --- Phase 4: Fixation ---
 //        Debug.Log($"RunTrial {eventNumber}: Fixation Phase Start");
 //        trialPanel.SetActive(false);
 //        fixationPanel.SetActive(true);
@@ -651,7 +948,6 @@
 //        optionAButton?.gameObject.SetActive(true);
 //        optionBButton?.gameObject.SetActive(true);
 
-//        // --- Phase 1: Onset ---
 //        selectionEnabled = false;
 //        decisionMade = false;
 //        trialPanel.SetActive(true);
@@ -681,7 +977,6 @@
 //        Debug.Log($"RunAttentionTest {eventNumber}: Onset Phase ({trialOnsetDuration}s)");
 //        yield return StartCoroutine(WaitPrecise(trialOnsetDuration));
 
-//        // --- Phase 2: Decision ---
 //        Debug.Log($"RunAttentionTest {eventNumber}: Decision Phase Start (Waiting for input)");
 //        yield return new WaitForEndOfFrame();
 //        SetupTrialButtons();
@@ -705,12 +1000,10 @@
 
 //        DataLogger.LogAttentionTest(eventNumber, response, responseTime);
 
-//        // --- Phase 3: Confirmation ---
 //        float confirmationDuration = Random.Range(decisionConfirmationMin, decisionConfirmationMax);
 //        Debug.Log($"RunAttentionTest {eventNumber}: Confirmation Phase ({confirmationDuration:F2}s)");
 //        yield return StartCoroutine(WaitPrecise(confirmationDuration));
 
-//        // --- Phase 4: Fixation ---
 //        Debug.Log($"RunAttentionTest {eventNumber}: Fixation Phase Start");
 //        trialPanel.SetActive(false);
 //        fixationPanel.SetActive(true);
@@ -743,11 +1036,15 @@
 //        selectionEnabled = true;
 //        SetButtonInteraction(true);
 //        decisionMade = false;
-//        decisionStartTime = Time.realtimeSinceStartup; // Use precise clock
+//        decisionStartTime = Time.realtimeSinceStartup;
 //        optionAButton?.onClick.RemoveAllListeners();
 //        optionBButton?.onClick.RemoveAllListeners();
 //        optionAButton?.onClick.AddListener(() => OnDecisionMade("A"));
 //        optionBButton?.onClick.AddListener(() => OnDecisionMade("B"));
+//        if (eventSystem == null)
+//        {
+//            eventSystem = EventSystem.current;
+//        }
 //        if (eventSystem != null && optionAButton != null && optionAButton.interactable)
 //        {
 //            eventSystem.SetSelectedGameObject(optionAButton.gameObject);
@@ -838,8 +1135,11 @@
 //            Button endButton = endExperimentButton.GetComponent<Button>();
 //            if (endButton != null) endButton.interactable = false;
 //        }
+
 //        DataLogger.SaveData(participantId, currentTask.ToString(), currentSeries);
 //        Debug.Log($"EndExperiment: Final data flush requested.");
+//        DeleteStateFile();
+
 //        if (instructionPanel != null && instructionText != null)
 //        {
 //            instructionPanel.SetActive(true);
@@ -870,9 +1170,11 @@
 //        trialPanel?.SetActive(false);
 //        fixationPanel?.SetActive(false);
 //        instructionPanel?.SetActive(false);
+
 //        DataLogger.SaveData(participantId, currentTask.ToString(), currentSeries);
 //        Debug.Log($"SaveAndQuitCoroutine: Final data flush requested.");
 //        yield return StartCoroutine(WaitPrecise(2.0f));
+
 //        CloseApplication();
 //    }
 
@@ -907,11 +1209,38 @@
 //        }
 //    }
 
-//    void SetButtonText(TMP_Text textComponent, string text) { if (textComponent != null) textComponent.text = text; }
-//    void SetButtonTransparency(Image buttonImage, float alpha) { if (buttonImage != null) { Color c = buttonImage.color; c.a = Mathf.Clamp01(alpha); buttonImage.color = c; } }
-//    void ShuffleTrials(List<SignallingTaskData.TrialData> list) { if (list == null || list.Count <= 1) return; System.Random rng = new System.Random(); int n = list.Count; while (n > 1) { n--; int k = rng.Next(n + 1); (list[k], list[n]) = (list[n], list[k]); } }
+//    void SetButtonText(TMP_Text textComponent, string text)
+//    {
+//        if (textComponent != null)
+//        {
+//            textComponent.text = text;
+//        }
+//    }
 
-//    private void InsertAttentionTests()
+//    void SetButtonTransparency(Image buttonImage, float alpha)
+//    {
+//        if (buttonImage != null)
+//        {
+//            Color currentColor = buttonImage.color;
+//            currentColor.a = Mathf.Clamp01(alpha);
+//            buttonImage.color = currentColor;
+//        }
+//    }
+
+//    private void ShuffleTrials(List<SignallingTaskData.TrialData> list)
+//    {
+//        if (list == null || list.Count <= 1) return;
+
+//        System.Random rng = new System.Random();
+//        int n = list.Count;
+//        while (n > 1)
+//        {
+//            n--;
+//            int k = rng.Next(n + 1);
+//            (list[k], list[n]) = (list[n], list[k]);
+//        }
+//    }
+//    void InsertAttentionTests()
 //    {
 //        if (SignallingTaskData.SignallingTrialLoader.Instance == null)
 //        {
@@ -921,6 +1250,7 @@
 //            attentionTestIndexToTestIndex.Clear();
 //            return;
 //        }
+
 //        if (SignallingTaskData.SignallingTrialLoader.Instance.AttentionTests == null)
 //        {
 //            Debug.LogWarning("SignallingTrialLoader.Instance.AttentionTests is null. Cannot insert tests.");
@@ -933,66 +1263,47 @@
 
 //        attentionTestIndices.Clear();
 //        attentionTestIndexToTestIndex.Clear();
+
 //        int numAttentionTests = attentionTests.Count;
 //        int numRegularTrials = currentTrialList?.Count ?? 0;
+//        int totalEvents = numRegularTrials + numAttentionTests;
 
-//        if (numAttentionTests == 0 || numRegularTrials == 0) return;
-
-//        // --- NEW, ROBUST LOGIC ---
-//        System.Random rng = new System.Random();
-
-//        // 1. Determine a set of potential insertion indices (0 to numRegularTrials - 1).
-//        // Since attention tests are inserted *between* regular trials, we use the number of trials as the base.
-//        List<int> possibleInsertSlots = Enumerable.Range(0, numRegularTrials + numAttentionTests).ToList();
-
-//        // Remove indices that are too close to the end if we have limited data.
-//        // A common practice is to skip the first and last few slots.
-
-//        // 2. Select `numAttentionTests` random, non-repeating positions from the total available events slots.
-//        // This implicitly handles spacing and collisions by picking unique indices from the final list.
-//        List<int> randomInsertionIndices = new List<int>();
-
-//        // Get the list of all possible event indices (0 to totalEvents - 1)
-//        List<int> allEventIndices = Enumerable.Range(0, numRegularTrials + numAttentionTests).ToList();
-
-//        // Ensure the regular trials are not all in one clump, e.g. skip the first few slots for attention tests
-//        int minStartOffset = 2;
-
-//        // Select random indices for the attention tests
-//        int testsPlaced = 0;
-//        while (testsPlaced < numAttentionTests)
+//        if (numAttentionTests == 0 || numRegularTrials == 0)
 //        {
-//            // Calculate remaining slots *after* accounting for tests already placed
-//            int maxIndex = numRegularTrials + testsPlaced;
-//            if (maxIndex < minStartOffset) maxIndex = minStartOffset; // Safety check
-
-//            // Choose a random index between minStartOffset and the end of the current possible events
-//            int randomIndex = rng.Next(minStartOffset, maxIndex + 1);
-
-//            // If we successfully place the test (no collision with already placed tests)
-//            if (attentionTestIndices.Add(randomIndex))
-//            {
-//                // We must ensure this insertion index is unique across ALL tests.
-//                // The HashSet 'attentionTestIndices' handles this perfectly.
-//                attentionTestIndexToTestIndex[randomIndex] = testsPlaced;
-//                testsPlaced++;
-//            }
+//            Debug.Log("InsertAttentionTests: Not enough regular trials or attention tests to perform insertion.");
+//            return;
 //        }
 
-//        // --- END OF NEW, ROBUST LOGIC ---
+//        int minStartIndex = 2;
+//        if (totalEvents <= minStartIndex)
+//        {
+//            Debug.LogWarning("Not enough total events to insert attention tests according to rules. Skipping insertion.");
+//            return;
+//        }
+//        List<int> possibleIndices = Enumerable.Range(minStartIndex, totalEvents - minStartIndex).ToList();
+
+//        System.Random rng = new System.Random();
+//        possibleIndices = possibleIndices.OrderBy(x => rng.Next()).ToList();
+
+//        List<int> chosenIndices = possibleIndices.Take(numAttentionTests).ToList();
+//        chosenIndices.Sort();
+
+//        for (int i = 0; i < chosenIndices.Count; i++)
+//        {
+//            int eventIndex = chosenIndices[i];
+//            attentionTestIndices.Add(eventIndex);
+//            attentionTestIndexToTestIndex[eventIndex] = i;
+//        }
 
 //        if (attentionTestIndices.Count > 0)
 //        {
-//            List<int> sortedIndices = new List<int>(attentionTestIndices);
-//            sortedIndices.Sort();
-//            Debug.Log($"InsertAttentionTests: Inserted {attentionTestIndices.Count} tests at event indices: {string.Join(", ", sortedIndices)}. Total Events: {numRegularTrials + attentionTestIndices.Count}");
+//            Debug.Log($"InsertAttentionTests: Inserted {attentionTestIndices.Count} tests at event indices: {string.Join(", ", chosenIndices)}. Total Events: {totalEvents}");
 //        }
 //        else if (numAttentionTests > 0)
 //        {
-//            Debug.LogWarning("InsertAttentionTests: Failed to place any attention tests.");
+//            Debug.LogWarning("InsertAttentionTests: Failed to place any attention tests with the new logic.");
 //        }
 //    }
-
 //    async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
 //    {
 //        if (!LocalizationSettings.HasSettings || LocalizationSettings.StringDatabase == null)
@@ -1023,6 +1334,8 @@
 //            return $"[{entryName}]";
 //        }
 //    }
-
-//    public string GetParticipantId() { return this.participantId; }
+//    public string GetParticipantId()
+//    {
+//        return this.participantId;
+//    }
 //}

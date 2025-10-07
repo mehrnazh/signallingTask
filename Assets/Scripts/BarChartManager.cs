@@ -54,15 +54,17 @@ public class BarChartManager : MonoBehaviour
 
         // Compute the scaling factor based on the maximum monetary value.
         float maxValue = Mathf.Max(optionASelf, optionAOther, optionBSelf, optionBOther);
-        float scaleFactor = chartMaxHeight / maxValue;
+        //float scaleFactor = chartMaxHeight / maxValue;
+        float scaleFactor = (maxValue > 0) ? chartMaxHeight / maxValue : 0;
+
 
         // Create bars for Option A: red for "Self" and blue for "Other".
-        CreateBar(groupAContainer, optionASelf, scaleFactor, Color.red);
-        CreateBar(groupAContainer, optionAOther, scaleFactor, Color.blue);
+        await CreateBar(groupAContainer, optionASelf, scaleFactor, Color.red);
+        await CreateBar(groupAContainer, optionAOther, scaleFactor, Color.blue);
 
         // Create bars for Option B.
-        CreateBar(groupBContainer, optionBSelf, scaleFactor, Color.red);
-        CreateBar(groupBContainer, optionBOther, scaleFactor, Color.blue);
+        await CreateBar(groupBContainer, optionBSelf, scaleFactor, Color.red);
+        await CreateBar(groupBContainer, optionBOther, scaleFactor, Color.blue);
     }
 
     /// <summary>
@@ -183,32 +185,6 @@ public class BarChartManager : MonoBehaviour
             
         return $"{parts[1]}{"/"}{parts[0]}";
     }
-
-    // private async Task<string> FormatValueAsync(float value)
-    // {
-    //     if (ShouldUseRTL())
-    //     {
-    //         // Create Persian culture with Western numerals
-    //         var customCulture = (CultureInfo)new CultureInfo("fa-IR").Clone();
-    //         customCulture.NumberFormat.NativeDigits = new[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-
-    //         // Format number without rounding using custom format
-    //         string formattedNumber = value.ToString("0.######", customCulture); // Custom format avoids rounding
-    //         string ltrNumber = "\u200E" + formattedNumber; // Apply LTR marker
-
-    //         // Combine number and symbol (if needed)
-    //         return ltrNumber;
-    //     }
-    //     else
-    //     {
-    //         // Use await for other languages as well
-    //         string format = await GetLocalizedStringAsync(UILocalizationTable, "C");
-    //         return string.Format(format, value);
-    //     }
-    // }
-
-
-
 
     private async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
     {
