@@ -11,66 +11,44 @@ using System.Globalization;
 public class BarChartManager : MonoBehaviour
 {
     [Header("UI References")]
-    // Overall chart container (optional, for layout purposes)
-    public RectTransform chartContainer; 
-    // Prefab for a single bar (must include an Image component and a child TMP_Text)
-    public GameObject barPrefab; 
+    public RectTransform chartContainer;
+    public GameObject barPrefab;
 
     [Header("Group Containers")]
-    // Containers for the bars (Option A and Option B respectively)
-    public Transform groupAContainer;  
-    public Transform groupBContainer;  
+    public Transform groupAContainer;
+    public Transform groupBContainer;
 
     [Header("Group Labels (Outside)")]
-    // Container for group labels; this should be positioned underneath the group containers.
     public RectTransform groupLabelsContainer;
-    // Font asset for RTL text
     public TMP_FontAsset rtlFontAsset;
 
     [Header("Chart Settings")]
-    // Maximum height in pixels corresponding to the highest monetary value.
-    public float chartMaxHeight = 300f; 
+    public float chartMaxHeight = 300f;
 
-    // Localization table reference
     private const string UILocalizationTable = "UI";
 
-    /// <summary>
-    /// Generates the bar chart using trial monetary allocations with localized text.
-    /// </summary>
     public async void CreateBarChart(float optionASelf, float optionAOther, float optionBSelf, float optionBOther)
     {
-        // Get localized strings for group labels
         var taskA = GetLocalizedStringAsync(UILocalizationTable, "option_a_label");
         var taskB = GetLocalizedStringAsync(UILocalizationTable, "option_b_label");
         await Task.WhenAll(taskA, taskB);
 
-        // Create or update group labels with localized text
-        RTLTextMeshPro groupALabel = GetOrCreateGroupLabelOutside("GroupALabel", taskA.Result);
-        RTLTextMeshPro groupBLabel = GetOrCreateGroupLabelOutside("GroupBLabel", taskB.Result);
+        GetOrCreateGroupLabelOutside("GroupALabel", taskA.Result);
+        GetOrCreateGroupLabelOutside("GroupBLabel", taskB.Result);
 
-        // Clear previous bars in the group containers.
         ClearChildren(groupAContainer);
         ClearChildren(groupBContainer);
 
-        // Compute the scaling factor based on the maximum monetary value.
         float maxValue = Mathf.Max(optionASelf, optionAOther, optionBSelf, optionBOther);
-        //float scaleFactor = chartMaxHeight / maxValue;
         float scaleFactor = (maxValue > 0) ? chartMaxHeight / maxValue : 0;
 
-
-        // Create bars for Option A: red for "Self" and blue for "Other".
-        await CreateBar(groupAContainer, optionASelf, scaleFactor, Color.red);
-        await CreateBar(groupAContainer, optionAOther, scaleFactor, Color.blue);
-
-        // Create bars for Option B.
-        await CreateBar(groupBContainer, optionBSelf, scaleFactor, Color.red);
-        await CreateBar(groupBContainer, optionBOther, scaleFactor, Color.blue);
+        // MODIFIED: Removed 'await' as CreateBar is no longer async.
+        CreateBar(groupAContainer, optionASelf, scaleFactor, Color.red);
+        CreateBar(groupAContainer, optionAOther, scaleFactor, Color.blue);
+        CreateBar(groupBContainer, optionBSelf, scaleFactor, Color.red);
+        CreateBar(groupBContainer, optionBOther, scaleFactor, Color.blue);
     }
 
-    /// <summary>
-    /// Searches for an existing label with the given name in GroupLabelsContainer.
-    /// If not found, creates a new RTLTextMeshPro element and adds it to the container.
-    /// </summary>
     private RTLTextMeshPro GetOrCreateGroupLabelOutside(string labelName, string defaultText)
     {
         Transform existingLabel = groupLabelsContainer.Find(labelName);
@@ -85,56 +63,40 @@ public class BarChartManager : MonoBehaviour
             }
             else
             {
-                // If the GameObject exists but the component is missing, destroy and recreate
                 Destroy(existingLabel.gameObject);
             }
         }
-        
+
         GameObject labelGO = new GameObject(labelName);
         labelGO.transform.SetParent(groupLabelsContainer, false);
-        
+
         textComp = labelGO.AddComponent<RTLTextMeshPro>();
         textComp.text = defaultText;
         textComp.alignment = TextAlignmentOptions.Center;
         textComp.fontSize = 24;
-        
-        // Set the RTL font asset if provided
+
         if (rtlFontAsset != null)
         {
             textComp.font = rtlFontAsset;
         }
-        
-        // Add LayoutElement to ensure proper sizing within a potential layout group
+
         LayoutElement layoutElement = labelGO.AddComponent<LayoutElement>();
-        layoutElement.preferredWidth = 200; // Adjust width as needed
-        
+        layoutElement.preferredWidth = 200;
+
         return textComp;
     }
 
-    // Helper function to determine if RTL should be used
-    private bool ShouldUseRTL()
-    {
-        // Check if the selected locale's code is Farsi ('fa')
-        return LocalizationSettings.SelectedLocale != null && 
-               LocalizationSettings.SelectedLocale.Identifier.Code == "fa";
-    }
-
-    /// <summary>
-    /// Destroys all children of the given parent.
-    /// </summary>
     private void ClearChildren(Transform parent)
     {
+        if (parent == null) return;
         foreach (Transform child in parent)
         {
             Destroy(child.gameObject);
         }
     }
 
-    /// <summary>
-    /// Instantiates a bar (from the prefab) into the specified parent container.
-    /// Sets its height (using the scale factor and monetary value), color, and positions its internal label.
-    /// </summary>
-    private async Task CreateBar(Transform parentContainer, float value, float scaleFactor, Color barColor)
+    // MODIFIED: Changed method from 'async Task' to 'void' as it runs synchronously.
+    private void CreateBar(Transform parentContainer, float value, float scaleFactor, Color barColor)
     {
         GameObject newBar = Instantiate(barPrefab, parentContainer, false);
         newBar.transform.localPosition = Vector3.zero;
@@ -142,29 +104,25 @@ public class BarChartManager : MonoBehaviour
         float barHeight = value * scaleFactor;
         barRect.sizeDelta = new Vector2(barRect.sizeDelta.x, barHeight);
         Image barImage = newBar.GetComponent<Image>();
-        if(barImage != null)
+        if (barImage != null)
             barImage.color = barColor;
+
         TMP_Text barLabel = newBar.GetComponentInChildren<TMP_Text>();
-        if(barLabel != null)
+        if (barLabel != null)
         {
-            // Ensure the label text renders on top
             Canvas labelCanvas = barLabel.gameObject.GetComponent<Canvas>();
             if (labelCanvas == null)
             {
                 labelCanvas = barLabel.gameObject.AddComponent<Canvas>();
             }
             labelCanvas.overrideSorting = true;
-            labelCanvas.sortingOrder = 1; // Ensure this is higher than the bar's canvas/default
+            labelCanvas.sortingOrder = 1;
 
-            // Add GraphicRaycaster if needed for interactions (optional, but good practice)
             if (barLabel.gameObject.GetComponent<GraphicRaycaster>() == null)
             {
                 barLabel.gameObject.AddComponent<GraphicRaycaster>();
             }
 
-            // Format the value with the appropriate currency symbol and format
-            // barLabel.text = $"{value}"; // Example with 2 decimal places
-            // barLabel.text = await FormatValueAsync(value);
             barLabel.text = FormatRTLNumber(value);
             RectTransform labelRect = barLabel.GetComponent<RectTransform>();
             labelRect.anchorMin = new Vector2(0.5f, 0f);
@@ -177,13 +135,26 @@ public class BarChartManager : MonoBehaviour
 
     private string FormatRTLNumber(float number)
     {
-        string numStr = number.ToString();
+        string numStr = number.ToString("G", CultureInfo.InvariantCulture);
         string[] parts = numStr.Split('.');
-        
-        if (parts.Length == 1)
-            return parts[0];
-            
-        return $"{parts[1]}{"/"}{parts[0]}";
+
+        if (ShouldUseRTL())
+        {
+            if (parts.Length == 1)
+                return parts[0];
+
+            return $"{parts[1]}/{parts[0]}";
+        }
+        else
+        {
+            return numStr;
+        }
+    }
+
+    private bool ShouldUseRTL()
+    {
+        return LocalizationSettings.SelectedLocale != null &&
+               LocalizationSettings.SelectedLocale.Identifier.Code == "fa";
     }
 
     private async Task<string> GetLocalizedStringAsync(string tableName, string entryName)
@@ -194,6 +165,6 @@ public class BarChartManager : MonoBehaviour
         {
             return operation.Result;
         }
-        return entryName; // Fallback to the entry name if localization fails
+        return entryName;
     }
 }

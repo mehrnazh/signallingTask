@@ -75,6 +75,18 @@ MonoBehaviour:
     m_Key: receiver_label
     m_Metadata:
       m_Items: []
+  - m_Id: 68415427271712768
+    m_Key: training_feedback_message
+    m_Metadata:
+      m_Items: []
+  - m_Id: 68418723726221312
+    m_Key: feedback_partner_followed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 68418844396347392
+    m_Key: feedback_partner_ignored
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

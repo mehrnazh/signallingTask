@@ -107,6 +107,35 @@ MonoBehaviour:
     m_Localized: Receiver
     m_Metadata:
       m_Items: []
+  - m_Id: 68415427271712768
+    m_Localized: 'You chose Option {0}.
+
+
+      {1}
+
+
+      Your payoff is: {2} points
+
+      The
+      other player''s payoff is: {3} points
+
+
+      The total payoff for this choice
+      is: {4} points
+
+
+      Press SPACE to continue.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 68418723726221312
+    m_Localized: Your Partner has made their choice based on the information you
+      shared
+    m_Metadata:
+      m_Items: []
+  - m_Id: 68418844396347392
+    m_Localized: Your Partner has made their choice against the information you shared
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

@@ -53,8 +53,7 @@ public class GameManager : MonoBehaviour
     public Image annotationImageCenter;
     public Image annotationImageLeft;
     public Image annotationImageRight;
-    //[Header("Training Session UI")]
-    //public TMP_Text trainingAnnotationText; // Assign the new text element here
+    public Image annotationImageCenterSmall; // NEW
 
     [Header("Training Feedback UI")]
     public GameObject trainingFeedbackPanel; // Assign your new panel
@@ -63,7 +62,7 @@ public class GameManager : MonoBehaviour
     public FeedbackManager feedbackManager; // Assign your FeedbackManager object here
 
     // Enum for annotation positions
-    public enum AnnotationPosition { Center, Left, Right }
+    public enum AnnotationPosition { Center, Left, Right, CenterSmall }
 
     // Struct to define a single training trial with images
     [System.Serializable]
@@ -87,6 +86,7 @@ public class GameManager : MonoBehaviour
         public Annotation annotation3;
         public Annotation annotation4;
         public Annotation annotation5;
+        public Annotation annotation6;
 
         [Header("Post-Decision Annotations")]
         public Annotation postDecisionAnnotationA;
@@ -131,13 +131,18 @@ public class GameManager : MonoBehaviour
     private const string UILocalizationTable = "UI";
     private int startEventIndex = 0;
 
-    //// Add this near your other private fields
-    //private int startEventIndex = 0; // The index we will start the RunAllTrials loop from
 
     private string GetStateFilePath(string pId, string task, int ser)
     {
         string filename = $"PID-{pId}_Task-{task}_Series-{ser}_resume.json";
         return System.IO.Path.Combine(Application.persistentDataPath, filename);
+    }
+
+    private bool ShouldUseRTL()
+    {
+        // Check if the selected locale's code is Farsi ('fa')
+        return LocalizationSettings.SelectedLocale != null &&
+               LocalizationSettings.SelectedLocale.Identifier.Code == "fa";
     }
 
     void Awake()
@@ -557,17 +562,15 @@ public class GameManager : MonoBehaviour
                 break;
         }
     }
+    // In GameManager.cs
 
     IEnumerator RunTrainingSession()
     {
         Debug.Log("--- Starting Advanced Training Session ---");
 
         trialPanel.SetActive(true);
-        trialInfoText.text = "Training"; // Or localize this text]
+        trialInfoText.text = "Training";
 
-        //optionAButton.gameObject.SetActive(false);
-        //optionBButton.gameObject.SetActive(false);
-        //trainingAnnotationText.gameObject.SetActive(true);
         for (int i = 0; i < trainingTrials.Count; i++)
         {
             TrainingTrial training = trainingTrials[i];
@@ -581,162 +584,158 @@ public class GameManager : MonoBehaviour
                 yield return ShowAnnotation(training.annotation2, 2.0f);
                 HideAllAnnotationImages();
                 yield return StartCoroutine(WaitPrecise(0.5f));
-
                 yield return ShowAnnotation(training.annotation3, 2.0f);
                 yield return ShowAnnotation(training.annotation4, 2.0f);
                 HideAllAnnotationImages();
                 yield return StartCoroutine(WaitPrecise(0.5f));
-
                 yield return ShowAnnotation(training.annotation5, 2.0f);
+                yield return ShowAnnotation(training.annotation6, 2.0f);
                 HideAllAnnotationImages();
-                //// Part 1 & 2
-                //trainingAnnotationText.text = training.annotation1;
-                //yield return StartCoroutine(WaitPrecise(2.0f));
-                //trainingAnnotationText.text = training.annotation1 + "\n\n" + training.annotation2;
-                //yield return StartCoroutine(WaitPrecise(2.0f));
-                //trainingAnnotationText.gameObject.SetActive(false);
-                //yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
-
-                //// Part 3 & 4
-                //trainingAnnotationText.gameObject.SetActive(true);
-                //trainingAnnotationText.text = training.annotation3;
-                //yield return StartCoroutine(WaitPrecise(2.0f));
-                //trainingAnnotationText.text = training.annotation3 + "\n\n" + training.annotation4;
-                //yield return StartCoroutine(WaitPrecise(2.0f));
-                //trainingAnnotationText.gameObject.SetActive(false);
-                //yield return StartCoroutine(WaitPrecise(0.5f)); // Brief pause
-
-                //// Part 5
-                //trainingAnnotationText.gameObject.SetActive(true);
-                //trainingAnnotationText.text = training.annotation5;
-                //yield return StartCoroutine(WaitPrecise(2.0f));
-                //trainingAnnotationText.gameObject.SetActive(false);
             }
-            // --- Decision Phase (runs for ALL trials) ---
-            Debug.Log("Training: Activating decision buttons.");
+
+            Debug.Log("Training: Displaying decision buttons.");
             optionAButton.gameObject.SetActive(true);
             optionBButton.gameObject.SetActive(true);
-            SetButtonInteraction(true);
 
-            var taskA = GetLocalizedStringAsync(UILocalizationTable, "option_a_label");
-            var taskB = GetLocalizedStringAsync(UILocalizationTable, "option_b_label");
+            // --- MODIFICATION START (Button Delay) ---
+            // NEW: Set buttons to be visible but not interactable at first.
+            SetButtonInteraction(false);
+
+            // Load the button text while they are inactive
+            string optionAKey = (currentTask == TaskType.Deception) ? "deception_option_a" : "control_option_a";
+            string optionBKey = (currentTask == TaskType.Deception) ? "deception_option_b" : "control_option_b";
+
+            var taskA = GetLocalizedStringAsync(UILocalizationTable, optionAKey);
+            var taskB = GetLocalizedStringAsync(UILocalizationTable, optionBKey);
             yield return new WaitUntil(() => taskA.IsCompleted && taskB.IsCompleted);
 
-            // NEW: Check if the localization tasks succeeded before trying to use the result.
             if (taskA.IsFaulted || taskB.IsFaulted)
             {
-                Debug.LogError("Failed to load localized button text! Check your Localization Table for 'option_a_label' and 'option_b_label'. Using fallback text.");
+                Debug.LogError($"LOCALIZATION ERROR: Failed to load button text! Check your Localization Table for '{optionAKey}' and '{optionBKey}'. Using fallback text.");
                 SetButtonText(optionAButtonText, "[Option A]");
                 SetButtonText(optionBButtonText, "[Option B]");
             }
             else
             {
-                // This is the success case
                 SetButtonText(optionAButtonText, taskA.Result);
                 SetButtonText(optionBButtonText, taskB.Result);
             }
 
-            //SetButtonText(optionAButtonText, taskA.Result);
-            //SetButtonText(optionBButtonText, taskB.Result);
+            // NEW: Wait for 2 seconds before allowing a decision (onset phase).
+            yield return StartCoroutine(WaitPrecise(2.0f));
 
-            // --- MODIFIED: The input handling section is updated below ---
+            Debug.Log("Training: Activating decision buttons.");
+            SetButtonInteraction(true);
+            // --- MODIFICATION END (Button Delay) ---
+
             string choice = "";
             bool decisionMadeThisTrial = false;
             optionAButton.onClick.RemoveAllListeners();
-            optionBButton.onClick.RemoveAllListeners(); // Fixed a small typo here too
+            optionBButton.onClick.RemoveAllListeners();
             optionAButton.onClick.AddListener(() => { choice = "A"; decisionMadeThisTrial = true; });
             optionBButton.onClick.AddListener(() => { choice = "B"; decisionMadeThisTrial = true; });
 
-            // NEW: Replaced 'WaitUntil' with a loop that checks for keyboard input each frame.
             while (!decisionMadeThisTrial)
             {
                 if (Input.GetKeyDown(KeyCode.LeftArrow))
                 {
-                    // Simulate a click on the left button
                     choice = "A";
                     decisionMadeThisTrial = true;
                 }
                 else if (Input.GetKeyDown(KeyCode.RightArrow))
                 {
-                    // Simulate a click on the right button
                     choice = "B";
                     decisionMadeThisTrial = true;
                 }
-                yield return null; // Wait for the next frame before checking again
+                yield return null;
             }
-            // --- END OF MODIFICATION ---
 
-            //yield return new WaitUntil(() => decisionMadeThisTrial);
             Debug.Log($"Training: Participant chose option {choice}.");
-            SetButtonInteraction(false); // Disable buttons after choice
+            SetButtonInteraction(false);
 
-            if (i == 0)
-            {
-                //    trainingAnnotationText.gameObject.SetActive(true);
-                //    if (choice == "A")
-                //    {
-                //        trainingAnnotationText.text = training.postDecisionAnnotationA;
-                //    }
-                //    else
-                //    {
-                //        trainingAnnotationText.text = training.postDecisionAnnotationB;
-                //    }
-                //    yield return StartCoroutine(WaitPrecise(3.0f));
-                //    trainingAnnotationText.gameObject.SetActive(false);
-                //}
-                //// --- Post-Decision Annotation ---
-                //trainingAnnotationText.gameObject.SetActive(true);
-                if (choice == "A")
-                {
-                    yield return ShowAnnotation(training.postDecisionAnnotationA, 3.0f);
+            if (choice == "A")
+                yield return ShowAnnotation(training.postDecisionAnnotationA, 3.0f);
+            else
+                yield return ShowAnnotation(training.postDecisionAnnotationB, 3.0f);
 
-                    //    {
-                    //        trainingAnnotationText.text = training.postDecisionAnnotationA;
-                    //}
-                }
-                else
-                {
-                    yield return ShowAnnotation(training.postDecisionAnnotationB, 3.0f);
-
-                    HideAllAnnotationImages();
-                    //    
-                    //    trainingAnnotationText.text = training.postDecisionAnnotationB;
-                    //}
-                }
-                trialPanel.SetActive(false); // Hide the main trial panel
-
-                trainingFeedbackPanel.SetActive(true);
-
-                float selfPayoff, otherPayoff, totalPayoff;
-                if (choice == "A")
-                {
-                    selfPayoff = training.optionASelf;
-                    otherPayoff = training.optionAOther;
-                }
-                else
-                {
-                    selfPayoff = training.optionBSelf;
-                    otherPayoff = training.optionBOther;
-                }
-                totalPayoff = selfPayoff + otherPayoff;
-
-                string feedbackMessage = $"You chose Option {choice}.\n\nYour payoff is: {selfPayoff}\nThe other player's payoff is: {otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}";
-                trainingFeedbackText.text = feedbackMessage;
-
-                bool continuePressed = false;
-                trainingContinueButton.onClick.RemoveAllListeners();
-                trainingContinueButton.onClick.AddListener(() => { continuePressed = true; });
-
-                yield return new WaitUntil(() => continuePressed);
-
-                trainingFeedbackPanel.SetActive(false);
-                trialPanel.SetActive(true); // Re-activate for the next loop iteration
-            }
+            HideAllAnnotationImages();
 
             trialPanel.SetActive(false);
-            Debug.Log("--- Training Session Complete ---");
-        } }
+            trainingFeedbackPanel.SetActive(true);
 
+            if (trainingContinueButton != null)
+            {
+                trainingContinueButton.gameObject.SetActive(false);
+            }
+
+            bool partnerFollowed = Random.value > 0.5f;
+
+            float selfPayoff, otherPayoff;
+            if (partnerFollowed)
+            {
+                if (choice == "A") { selfPayoff = training.optionASelf; otherPayoff = training.optionAOther; }
+                else { selfPayoff = training.optionBSelf; otherPayoff = training.optionBOther; }
+            }
+            else
+            {
+                if (choice == "A") { selfPayoff = training.optionBSelf; otherPayoff = training.optionBOther; }
+                else { selfPayoff = training.optionASelf; otherPayoff = training.optionAOther; }
+            }
+            float totalPayoff = selfPayoff + otherPayoff;
+
+            // --- MODIFICATION START (Farsi Text Swap) ---
+            // NEW: Create a display variable for the choice text.
+            string displayChoice = choice;
+            if (ShouldUseRTL())
+            {
+                if (choice == "A") displayChoice = "ب";
+                else if (choice == "B") displayChoice = "الف";
+            }
+
+            string partnerMessageKey = partnerFollowed ? "feedback_partner_followed" : "feedback_partner_ignored";
+
+            var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_feedback_message");
+            var partnerMessageTask = GetLocalizedStringAsync(UILocalizationTable, partnerMessageKey);
+            yield return new WaitUntil(() => feedbackFormatTask.IsCompleted && partnerMessageTask.IsCompleted);
+
+            string feedbackMessage;
+            if (feedbackFormatTask.IsFaulted || partnerMessageTask.IsFaulted)
+            {
+                Debug.LogError("LOCALIZATION ERROR: Could not find feedback keys. Using default English text.");
+                string partnerText = partnerFollowed ? "Your Partner has made their choice based on the information you shared" : "Your Partner has made their choice against the information you shared";
+                feedbackMessage = $"You chose Option {displayChoice}.\n\n{partnerText}\n\nYour payoff is: {selfPayoff}\nThe other player's payoff is: {otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}\n\nPress SPACE to continue.";
+            }
+            else
+            {
+                string localizedFormat = feedbackFormatTask.Result;
+                string partnerMessage = partnerMessageTask.Result;
+                // MODIFIED: Use 'displayChoice' instead of 'choice' in the final message.
+                feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, selfPayoff, otherPayoff, totalPayoff);
+            }
+            // --- MODIFICATION END (Farsi Text Swap) ---
+
+            trainingFeedbackText.text = feedbackMessage;
+
+            bool continuePressed = false;
+            while (!continuePressed)
+            {
+                if (Input.GetKeyDown(KeyCode.Space))
+                {
+                    continuePressed = true;
+                }
+                yield return null;
+            }
+
+            trainingFeedbackPanel.SetActive(false);
+            trialPanel.SetActive(true);
+        }
+
+        trialPanel.SetActive(false);
+        Debug.Log("--- Training Session Complete ---");
+    }
+    // In GameManager.cs
+
+    // MODIFIED: Helper function to show a specific annotation IMAGE
     private IEnumerator ShowAnnotation(TrainingTrial.Annotation annotation, float duration)
     {
         Image targetImage = null;
@@ -748,6 +747,9 @@ public class GameManager : MonoBehaviour
             case AnnotationPosition.Right:
                 targetImage = annotationImageRight;
                 break;
+            case AnnotationPosition.CenterSmall: // NEW: Added case for the small center image
+                targetImage = annotationImageCenterSmall;
+                break;
             default: // Center
                 targetImage = annotationImageCenter;
                 break;
@@ -755,9 +757,9 @@ public class GameManager : MonoBehaviour
 
         if (targetImage != null && annotation.image != null)
         {
-            HideAllAnnotationImages();
+            HideAllAnnotationImages(); // Clear previous images
             targetImage.sprite = annotation.image;
-            targetImage.color = Color.white;
+            targetImage.color = Color.white; // Make it fully visible
             targetImage.gameObject.SetActive(true);
             yield return StartCoroutine(WaitPrecise(duration));
         }
@@ -767,6 +769,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // MODIFIED: Helper function to hide all annotation IMAGES at once
     private void HideAllAnnotationImages()
     {
         if (annotationImageCenter != null)
@@ -784,15 +787,12 @@ public class GameManager : MonoBehaviour
             annotationImageRight.gameObject.SetActive(false);
             annotationImageRight.sprite = null;
         }
+        if (annotationImageCenterSmall != null) // NEW: Added logic to hide the small center image
+        {
+            annotationImageCenterSmall.gameObject.SetActive(false);
+            annotationImageCenterSmall.sprite = null;
+        }
     }
-
-    //// Find this method in your existing code and modify it
-    //public void StartGameInternal()
-    //{
-    //    Debug.Log("StartGameInternal: Received signal to start the main trial loop. Redirecting to master flow.");
-    //    // This is now the entry point to the entire experiment, not just the trials.
-    //    StartExperimentFlow();
-    //}
 
     IEnumerator RunAllTrials()
     {
