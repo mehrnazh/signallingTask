@@ -668,7 +668,7 @@ public class GameManager : MonoBehaviour
                 trainingContinueButton.gameObject.SetActive(false);
             }
 
-            bool partnerFollowed = Random.value > 0.5f;
+            bool partnerFollowed = Random.value > 0.3f;
 
             float selfPayoff, otherPayoff;
             if (partnerFollowed)

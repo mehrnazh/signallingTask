@@ -66,9 +66,11 @@ public class LegendManager : MonoBehaviour
         var receiverTask = GetLocalizedStringAsync(UILocalizationTable, "receiver_label");
         await Task.WhenAll(senderTask, receiverTask);
 
-        // Create legend items with localized text
-        CreateLegendItem(senderTask.Result, Color.red);
+        // 1. Create Receiver (Blue) - will appear on the LEFT
         CreateLegendItem(receiverTask.Result, Color.blue);
+
+        // 2. Create Sender (Red) - will appear on the RIGHT
+        CreateLegendItem(senderTask.Result, Color.red);
 
         isLegendCreated = true;
     }

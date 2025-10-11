@@ -42,11 +42,13 @@ public class BarChartManager : MonoBehaviour
         float maxValue = Mathf.Max(optionASelf, optionAOther, optionBSelf, optionBOther);
         float scaleFactor = (maxValue > 0) ? chartMaxHeight / maxValue : 0;
 
-        // MODIFIED: Removed 'await' as CreateBar is no longer async.
-        CreateBar(groupAContainer, optionASelf, scaleFactor, Color.red);
-        CreateBar(groupAContainer, optionAOther, scaleFactor, Color.blue);
-        CreateBar(groupBContainer, optionBSelf, scaleFactor, Color.red);
-        CreateBar(groupBContainer, optionBOther, scaleFactor, Color.blue);
+        // Option A: Now creates Receiver (Blue) first, then Sender (Red)
+        CreateBar(groupAContainer, optionAOther, scaleFactor, Color.blue); // Receiver (Left)
+        CreateBar(groupAContainer, optionASelf, scaleFactor, Color.red);  // Sender (Right)
+
+        // Option B: Now creates Receiver (Blue) first, then Sender (Red)
+        CreateBar(groupBContainer, optionBOther, scaleFactor, Color.blue); // Receiver (Left)
+        CreateBar(groupBContainer, optionBSelf, scaleFactor, Color.red);  // Sender (Right)
     }
 
     private RTLTextMeshPro GetOrCreateGroupLabelOutside(string labelName, string defaultText)

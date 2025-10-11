@@ -2337,45 +2337,45 @@ MonoBehaviour:
   instructionImage: {fileID: 80014937}
   series1DeceptionEnglishPart1Sprites: []
   series1DeceptionFarsiPart1Sprites:
-  - {fileID: 21300000, guid: 3859f41d07a8b5443a20880857fec4be, type: 3}
-  - {fileID: 21300000, guid: 092355aa65436914b91efc428292d1c4, type: 3}
-  - {fileID: 21300000, guid: 6fa484a8c308d30489813c95ea8c208a, type: 3}
-  - {fileID: 21300000, guid: 182cfac0918027749aca94f55eb64839, type: 3}
-  - {fileID: 21300000, guid: a86a01d4f85220145a0c17ca9fd964ad, type: 3}
-  - {fileID: 21300000, guid: 10c269fb317121f40a2fd0343a0cdd12, type: 3}
-  - {fileID: 21300000, guid: 9a3e56fa1315c8649b91972c2c791d05, type: 3}
-  - {fileID: 21300000, guid: 057767151e5aa064da153828890ca242, type: 3}
-  - {fileID: 21300000, guid: 8bec7dbb0b58d1e4ba2ab422c35b35c7, type: 3}
-  - {fileID: 21300000, guid: d553bc21940351144a088a6517fe53d6, type: 3}
+  - {fileID: 21300000, guid: 5fe82835fb387c3409fc74ebe759491e, type: 3}
+  - {fileID: 21300000, guid: 216ee5026296ae340804c1f9ae726c35, type: 3}
+  - {fileID: 21300000, guid: e64803337846bea458e1411f888df86c, type: 3}
+  - {fileID: 21300000, guid: ed1c6d52ed3943d4dbfd7ce8672d9dbe, type: 3}
+  - {fileID: 21300000, guid: b5260cecc531dba47bc1ab15d4bb023d, type: 3}
+  - {fileID: 21300000, guid: 5bd99efd42d9dd249bb7ef2de7598cc6, type: 3}
+  - {fileID: 21300000, guid: b43bc455268a6ea42915b354c1cd560b, type: 3}
+  - {fileID: 21300000, guid: e11504bd53ff2154a966e2da28746c3b, type: 3}
+  - {fileID: 21300000, guid: 60d2de5d4b68b0842b2011697065d2a0, type: 3}
+  - {fileID: 21300000, guid: 1173570cc883cda45a8c3c4bb4fc3208, type: 3}
   series1ControlEnglishPart1Sprites: []
   series1ControlFarsiPart1Sprites:
-  - {fileID: 21300000, guid: 3859f41d07a8b5443a20880857fec4be, type: 3}
-  - {fileID: 21300000, guid: 092355aa65436914b91efc428292d1c4, type: 3}
-  - {fileID: 21300000, guid: 6fa484a8c308d30489813c95ea8c208a, type: 3}
-  - {fileID: 21300000, guid: 182cfac0918027749aca94f55eb64839, type: 3}
-  - {fileID: 21300000, guid: ebd43d3e6fb8d154e8beb3c2ed45ce22, type: 3}
-  - {fileID: 21300000, guid: 10c269fb317121f40a2fd0343a0cdd12, type: 3}
-  - {fileID: 21300000, guid: 9a3e56fa1315c8649b91972c2c791d05, type: 3}
-  - {fileID: 21300000, guid: 057767151e5aa064da153828890ca242, type: 3}
-  - {fileID: 21300000, guid: 8bec7dbb0b58d1e4ba2ab422c35b35c7, type: 3}
-  - {fileID: 21300000, guid: d553bc21940351144a088a6517fe53d6, type: 3}
+  - {fileID: 21300000, guid: 5fe82835fb387c3409fc74ebe759491e, type: 3}
+  - {fileID: 21300000, guid: 216ee5026296ae340804c1f9ae726c35, type: 3}
+  - {fileID: 21300000, guid: e64803337846bea458e1411f888df86c, type: 3}
+  - {fileID: 21300000, guid: ed1c6d52ed3943d4dbfd7ce8672d9dbe, type: 3}
+  - {fileID: 21300000, guid: 70048ea9e3e1538488bc428933211681, type: 3}
+  - {fileID: 21300000, guid: 5bd99efd42d9dd249bb7ef2de7598cc6, type: 3}
+  - {fileID: 21300000, guid: b43bc455268a6ea42915b354c1cd560b, type: 3}
+  - {fileID: 21300000, guid: e11504bd53ff2154a966e2da28746c3b, type: 3}
+  - {fileID: 21300000, guid: 60d2de5d4b68b0842b2011697065d2a0, type: 3}
+  - {fileID: 21300000, guid: 1173570cc883cda45a8c3c4bb4fc3208, type: 3}
   series2DeceptionEnglishPart1Sprites: []
   series2DeceptionFarsiPart1Sprites:
-  - {fileID: 21300000, guid: 6c3f14783f23da443a8e534f0dc7dac2, type: 3}
-  - {fileID: 21300000, guid: 6481aad0ec2ed294e93cf5823459e9e1, type: 3}
-  - {fileID: 21300000, guid: 8149983e00160c14193eb926a8da4f2c, type: 3}
-  - {fileID: 21300000, guid: cdec3025d8aa75b4f9fe27e7f4210efa, type: 3}
-  - {fileID: 21300000, guid: aa2488adbc1903f488df025b7fc62036, type: 3}
+  - {fileID: 21300000, guid: c79b933d72a64614fb16be9e9d15cace, type: 3}
+  - {fileID: 21300000, guid: f90003d1da184864c828599e280176ed, type: 3}
+  - {fileID: 21300000, guid: 2bfef02f4408a3e4f8961d1746b05057, type: 3}
+  - {fileID: 21300000, guid: 19d6fd7e74a25254d8c08ea9ad3a7adc, type: 3}
+  - {fileID: 21300000, guid: 7629cd5638f127142817a2e3c4c43fa1, type: 3}
   series2ControlEnglishPart1Sprites: []
   series2ControlFarsiPart1Sprites:
-  - {fileID: 21300000, guid: 6c3f14783f23da443a8e534f0dc7dac2, type: 3}
-  - {fileID: 21300000, guid: 6481aad0ec2ed294e93cf5823459e9e1, type: 3}
-  - {fileID: 21300000, guid: 32cd62ad187cfed4daaece9aceb28557, type: 3}
-  - {fileID: 21300000, guid: cdec3025d8aa75b4f9fe27e7f4210efa, type: 3}
-  - {fileID: 21300000, guid: aa2488adbc1903f488df025b7fc62036, type: 3}
+  - {fileID: 21300000, guid: c79b933d72a64614fb16be9e9d15cace, type: 3}
+  - {fileID: 21300000, guid: f90003d1da184864c828599e280176ed, type: 3}
+  - {fileID: 21300000, guid: 6e7be024e10f4b743bf322f243910b23, type: 3}
+  - {fileID: 21300000, guid: 19d6fd7e74a25254d8c08ea9ad3a7adc, type: 3}
+  - {fileID: 21300000, guid: 7629cd5638f127142817a2e3c4c43fa1, type: 3}
   series1DeceptionEnglishPart2Sprites: []
   series1DeceptionFarsiPart2Sprites:
-  - {fileID: 21300000, guid: cec742a6e2a5d2a458709e45ae9c2a3e, type: 3}
+  - {fileID: 21300000, guid: ba795fd30633ba64daa5a839c5c2b2a0, type: 3}
   series1ControlEnglishPart2Sprites: []
   series1ControlFarsiPart2Sprites:
   - {fileID: 21300000, guid: cec742a6e2a5d2a458709e45ae9c2a3e, type: 3}
