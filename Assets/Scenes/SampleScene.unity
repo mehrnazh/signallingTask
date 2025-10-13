@@ -574,8 +574,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -75}
-  m_SizeDelta: {x: -800, y: -1150}
+  m_AnchoredPosition: {x: 0, y: -70}
+  m_SizeDelta: {x: -800, y: -1300}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &82644897
 MonoBehaviour:
@@ -1813,8 +1813,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 479, y: -29}
-  m_SizeDelta: {x: 331.0694, y: 154.72}
+  m_AnchoredPosition: {x: 479, y: -16.523981}
+  m_SizeDelta: {x: 331.069, y: 179.672}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &445922873
 MonoBehaviour:
@@ -2560,6 +2560,7 @@ MonoBehaviour:
   instructionText: {fileID: 121410499}
   trialInfoText: {fileID: 1618566019}
   interRunText: {fileID: 1469353436}
+  TrialInstructionText: {fileID: 0}
   optionAButton: {fileID: 443359361}
   optionBButton: {fileID: 1094883929}
   endExperimentButton: {fileID: 561879211}
@@ -2588,16 +2589,16 @@ MonoBehaviour:
     optionBSelf: 3
     optionBOther: 3
     annotation1:
-      image: {fileID: 21300000, guid: edf1da313e7bda94c91871dcc232a11c, type: 3}
+      image: {fileID: 21300000, guid: 6044d7b0e28b6eb4fa31b04e15fcf573, type: 3}
       position: 2
     annotation2:
-      image: {fileID: 21300000, guid: 2dd6a22a5922bdf4094b6150d1fa17c6, type: 3}
+      image: {fileID: 21300000, guid: 82cc1aac213364c46988d99ad84db3ba, type: 3}
       position: 3
     annotation3:
-      image: {fileID: 21300000, guid: 4c6456b1a63c56a4abb47fd32e5eddfb, type: 3}
+      image: {fileID: 21300000, guid: d6a481aae2532d74185e499150135bd7, type: 3}
       position: 3
     annotation4:
-      image: {fileID: 21300000, guid: ccf2f4f4ca7e0cb429520537a724fd65, type: 3}
+      image: {fileID: 21300000, guid: 60663206fd2c69b4980ea76cceb3e8f6, type: 3}
       position: 1
     annotation5:
       image: {fileID: 21300000, guid: 74fcca7008911fa41a849c607a9bb7ea, type: 3}
@@ -2607,10 +2608,10 @@ MonoBehaviour:
       position: 0
     postDecisionAnnotationA:
       image: {fileID: 21300000, guid: af2d45b95ba28e44fa6c10edb537b3a4, type: 3}
-      position: 0
+      position: 3
     postDecisionAnnotationB:
       image: {fileID: 21300000, guid: 3adc03c15c64dd440ace13268f2dce34, type: 3}
-      position: 0
+      position: 3
     correctAnswer: A
   - optionASelf: 5
     optionAOther: 10
@@ -4487,8 +4488,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -0.000019073, y: 44}
-  m_SizeDelta: {x: 529.713, y: 190.1283}
+  m_AnchoredPosition: {x: 8.317, y: 33.766}
+  m_SizeDelta: {x: 513.078, y: 169.663}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1064715034
 MonoBehaviour:
@@ -5768,8 +5769,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -24.615, y: 27.402}
-  m_SizeDelta: {x: 276.0615, y: 162.43}
+  m_AnchoredPosition: {x: -24.614, y: -50}
+  m_SizeDelta: {x: 276.061, y: 180.728}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1331768680
 MonoBehaviour:

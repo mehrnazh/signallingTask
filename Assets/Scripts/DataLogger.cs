@@ -16,10 +16,9 @@ public static class DataLogger
     {
         startTime = Time.realtimeSinceStartup;
         csvLines.Clear();
+        // Updated header to better reflect the new FeedbackTrial log format
         csvLines.Add("ParticipantID,EventNumber,AbsoluteTime,TaskTypeOrEvent,MessageChosenOrResponse,ReactionTime,BarData");
     }
-
-    // Add this new public static method to DataLogger.cs
 
     /// <summary>
     /// Resets the logger for a new experiment session within the same application instance.
@@ -60,6 +59,29 @@ public static class DataLogger
         string barDataString = barData != null ? string.Join(",", barData.Select(b => b.ToString("F2"))) : "N/A";
         string line = string.Format("{0},{1},{2:F4},{3},{4},{5:F4},{6}",
                                     participantId, eventNumber, absoluteTime, taskType, messageChosen, reactionTime,
+                                    barDataString
+                                   );
+        csvLines.Add(line);
+    }
+
+    /// <summary>
+    /// Logs data for a trial that was randomly chosen for feedback.
+    /// </summary>
+    public static void LogFeedbackTrial(int eventNumber, float selfPayoff, float otherPayoff, bool partnerFollowed, string participantChoice)
+    {
+        float absoluteTime = Time.realtimeSinceStartup - startTime;
+        string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID";
+        string partnerResult = partnerFollowed ? "Followed" : "Ignored";
+
+        // Log the outcome payoffs and partner's action in the BarData column
+        // Format: SelfPayoff,OtherPayoff,PartnerAction
+        string barDataString = $"{selfPayoff:F2},{otherPayoff:F2},{partnerResult}";
+
+        // Note: ReactionTime is logged as "N/A" here because this entry logs the OUTCOME, 
+        // the RT for the decision is already logged in the preceding LogTrial call.
+        string line = string.Format("{0},{1},{2:F4},{3},{4},{5},{6}",
+                                    participantId, eventNumber, absoluteTime, "FeedbackTrial",
+                                    participantChoice, "N/A",
                                     barDataString
                                    );
         csvLines.Add(line);

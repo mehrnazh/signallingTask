@@ -7,12 +7,24 @@ using UnityEngine.EventSystems;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 using UnityEngine.Localization.Tables;
-using System.Threading.Tasks; 
+using System.Threading.Tasks;
 using System.Linq;
 //using SignallingTaskData;
 
 // Enum to distinguish between task types.
 public enum TaskType { Deception, Control }
+
+// --- NEW STRUCT ---
+[System.Serializable]
+public struct FeedbackTrialOutcome
+{
+    public int originalTrialListIndex; // Index in the shuffledTrialOrder list
+    public string participantChoice;    // "A" or "B"
+    public float selfPayoff;
+    public float otherPayoff;
+    public bool partnerFollowed; // Whether the partner followed the shared message
+}
+// --- NEW STRUCT ---
 
 public class GameManager : MonoBehaviour
 {
@@ -30,6 +42,7 @@ public class GameManager : MonoBehaviour
     public TMP_Text instructionText;
     public TMP_Text trialInfoText;
     public TMP_Text interRunText;
+    public TMP_Text TrialInstructionText; // <-- ADDED
 
     [Header("Buttons")]
     public Button optionAButton;
@@ -97,7 +110,7 @@ public class GameManager : MonoBehaviour
     }
 
     [Header("Training Session Data")]
-    public List<TrainingTrial> trainingTrials; 
+    public List<TrainingTrial> trainingTrials;
 
     // Enum and variable to manage the experiment's master flow
     private enum ExperimentPhase { Setup, InstructionsPart1, Training, InstructionsPart2, MainTrials, Finished }
@@ -114,18 +127,19 @@ public class GameManager : MonoBehaviour
 
     // Optimized data structures
     private List<SignallingTaskData.TrialData> currentTrialList;
-    private List<string> trialResponses = new List<string>(); 
+    private List<string> trialResponses = new List<string>();
     private List<SignallingTaskData.AttentionTestData> attentionTests = new List<SignallingTaskData.AttentionTestData>();
     private HashSet<int> attentionTestIndices = new HashSet<int>();
-    private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>(); 
+    private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>();
+    private List<FeedbackTrialOutcome> feedbackTrialOutcomes = new List<FeedbackTrialOutcome>(); // NEW FIELD
 
-    private bool decisionMade = false; 
-    private bool selectionEnabled = false; 
-    private float decisionStartTime; 
+    private bool decisionMade = false;
+    private bool selectionEnabled = false;
+    private float decisionStartTime;
 
     private bool isInitialized = false;
-    private bool isDataLoaded = false; 
-    private bool hasReceivedOptions = false; 
+    private bool isDataLoaded = false;
+    private bool hasReceivedOptions = false;
 
     private string participantId = "DEFAULT_ID";
     private const string UILocalizationTable = "UI";
@@ -181,7 +195,7 @@ public class GameManager : MonoBehaviour
         this.currentSeries = series;
         this.participantId = participantId;
 
-        DataLogger.SetFilePath(participantId, task.ToString(), series); 
+        DataLogger.SetFilePath(participantId, task.ToString(), series);
         AttemptToLoadState(participantId, task, series);
         hasReceivedOptions = true;
         StartCoroutine(InitializeLocalizationAndUI(langCode));
@@ -350,12 +364,13 @@ public class GameManager : MonoBehaviour
         if (barChartManager == null) Debug.LogWarning("BarChartManager not found in the scene.");
         if (legendManager == null) Debug.LogWarning("LegendManager not found in the scene.");
         if (instructionManager == null) Debug.LogWarning("InstructionManager not found during InitializeComponents. Will check again later.");
+        if (TrialInstructionText == null) Debug.LogWarning("TrialInstructionText is not assigned in the Inspector!"); // ADDED WARNING
 
         SetButtonInteraction(false);
     }
 
     private void SaveExperimentState()
-    { 
+    {
         int lastCompletedIndex = trialResponses.Count - 1;
 
         if (lastCompletedIndex < 0) return;
@@ -571,26 +586,89 @@ public class GameManager : MonoBehaviour
         trialPanel.SetActive(true);
         trialInfoText.text = "Training";
 
+        // Load the localized template string once before the loop
+        Task<string> instructionFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_info"); // NEW KEY
+
         for (int i = 0; i < trainingTrials.Count; i++)
         {
             TrainingTrial training = trainingTrials[i];
             Debug.Log($"Starting training trial {i + 1}/{trainingTrials.Count}");
 
+            // --- Update Training Instruction Text ---
+            if (TrialInstructionText != null)
+            {
+                yield return new WaitUntil(() => instructionFormatTask.IsCompleted);
+                string localizedFormat = instructionFormatTask.IsCompletedSuccessfully ? instructionFormatTask.Result : "Training {0} of {1}";
+
+                TrialInstructionText.text = string.Format(localizedFormat, i + 1, trainingTrials.Count);
+            }
+            // --- End Update Training Instruction Text ---
+
             barChartManager.CreateBarChart(training.optionASelf, training.optionAOther, training.optionBSelf, training.optionBOther);
 
             if (i == 0)
             {
-                yield return ShowAnnotation(training.annotation1, 2.0f);
-                yield return ShowAnnotation(training.annotation2, 2.0f);
+                float annotationDuration = 2.0f;
+
+                // --- MODIFIED: Bi-directional Annotation Navigation Logic ---
+                TrainingTrial.Annotation[] annotationsToShow = {
+                    training.annotation1,
+                    training.annotation2,
+                    training.annotation3,
+                    training.annotation4,
+                    training.annotation5,
+                    training.annotation6
+                };
+
+                int currentAnnotationIndex = 0;
+                while (currentAnnotationIndex < annotationsToShow.Length)
+                {
+                    // Always show the current annotation
+                    yield return ShowAnnotation(annotationsToShow[currentAnnotationIndex], annotationDuration);
+
+                    // Start timer/key wait
+                    float startTime = Time.realtimeSinceStartup;
+                    bool moved = false;
+                    while (Time.realtimeSinceStartup < startTime + annotationDuration && !moved)
+                    {
+                        if (Input.GetKeyDown(KeyCode.RightArrow))
+                        {
+                            currentAnnotationIndex++;
+                            moved = true;
+                        }
+                        else if (Input.GetKeyDown(KeyCode.LeftArrow))
+                        {
+                            // Decrement, but don't go below the start (index 0)
+                            if (currentAnnotationIndex > 0)
+                            {
+                                currentAnnotationIndex--;
+                                moved = true;
+                            }
+                            else // Already at index 0, but still allow timer to run
+                            {
+                                // Log/debug if necessary
+                            }
+                        }
+                        yield return null;
+                    }
+
+                    // If the timer ran out and no key was pressed, automatically advance
+                    if (!moved)
+                    {
+                        currentAnnotationIndex++;
+                    }
+
+                    // Special case: If index is 2 or 4 (after 2nd or 4th annotation), hide all and pause briefly
+                    if (currentAnnotationIndex == 2 || currentAnnotationIndex == 4)
+                    {
+                        HideAllAnnotationImages();
+                        yield return StartCoroutine(WaitPrecise(0.5f));
+                    }
+                }
+
+                // Final cleanup after the loop
                 HideAllAnnotationImages();
-                yield return StartCoroutine(WaitPrecise(0.5f));
-                yield return ShowAnnotation(training.annotation3, 2.0f);
-                yield return ShowAnnotation(training.annotation4, 2.0f);
-                HideAllAnnotationImages();
-                yield return StartCoroutine(WaitPrecise(0.5f));
-                yield return ShowAnnotation(training.annotation5, 2.0f);
-                yield return ShowAnnotation(training.annotation6, 2.0f);
-                HideAllAnnotationImages();
+                // --- END MODIFIED: Bi-directional Annotation Navigation Logic ---
             }
 
             Debug.Log("Training: Displaying decision buttons.");
@@ -598,10 +676,8 @@ public class GameManager : MonoBehaviour
             optionBButton.gameObject.SetActive(true);
 
             // --- MODIFICATION START (Button Delay) ---
-            // NEW: Set buttons to be visible but not interactable at first.
             SetButtonInteraction(false);
 
-            // Load the button text while they are inactive
             string optionAKey = (currentTask == TaskType.Deception) ? "deception_option_a" : "control_option_a";
             string optionBKey = (currentTask == TaskType.Deception) ? "deception_option_b" : "control_option_b";
 
@@ -621,7 +697,7 @@ public class GameManager : MonoBehaviour
                 SetButtonText(optionBButtonText, taskB.Result);
             }
 
-            // NEW: Wait for 2 seconds before allowing a decision (onset phase).
+            // Wait for 2 seconds before allowing a decision (onset phase).
             yield return StartCoroutine(WaitPrecise(2.0f));
 
             Debug.Log("Training: Activating decision buttons.");
@@ -653,6 +729,7 @@ public class GameManager : MonoBehaviour
             Debug.Log($"Training: Participant chose option {choice}.");
             SetButtonInteraction(false);
 
+            // Post-Decision Annotations: Use the fixed timer wait.
             if (choice == "A")
                 yield return ShowAnnotation(training.postDecisionAnnotationA, 3.0f);
             else
@@ -683,8 +760,7 @@ public class GameManager : MonoBehaviour
             }
             float totalPayoff = selfPayoff + otherPayoff;
 
-            // --- MODIFICATION START (Farsi Text Swap) ---
-            // NEW: Create a display variable for the choice text.
+            // --- Farsi Text Swap ---
             string displayChoice = choice;
             if (ShouldUseRTL())
             {
@@ -709,10 +785,9 @@ public class GameManager : MonoBehaviour
             {
                 string localizedFormat = feedbackFormatTask.Result;
                 string partnerMessage = partnerMessageTask.Result;
-                // MODIFIED: Use 'displayChoice' instead of 'choice' in the final message.
                 feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, selfPayoff, otherPayoff, totalPayoff);
             }
-            // --- MODIFICATION END (Farsi Text Swap) ---
+            // --- End Farsi Text Swap ---
 
             trainingFeedbackText.text = feedbackMessage;
 
@@ -730,12 +805,18 @@ public class GameManager : MonoBehaviour
             trialPanel.SetActive(true);
         }
 
+        // Clear the instruction text after training is complete
+        if (TrialInstructionText != null)
+        {
+            TrialInstructionText.text = "";
+        }
+
         trialPanel.SetActive(false);
         Debug.Log("--- Training Session Complete ---");
     }
-    // In GameManager.cs
 
-    // MODIFIED: Helper function to show a specific annotation IMAGE
+    // --- REMOVED: WaitForAnnotationDisplayOrKey is now integrated into RunTrainingSession. ---
+
     private IEnumerator ShowAnnotation(TrainingTrial.Annotation annotation, float duration)
     {
         Image targetImage = null;
@@ -761,14 +842,15 @@ public class GameManager : MonoBehaviour
             targetImage.sprite = annotation.image;
             targetImage.color = Color.white; // Make it fully visible
             targetImage.gameObject.SetActive(true);
-            yield return StartCoroutine(WaitPrecise(duration));
+            yield return null; // Wait 1 frame after showing
+            // Note: The duration is handled by the caller (RunTrainingSession loop logic)
         }
         else if (annotation.image == null)
         {
             Debug.LogWarning("ShowAnnotation called, but no sprite was assigned in the Inspector.");
         }
     }
-
+    
     // MODIFIED: Helper function to hide all annotation IMAGES at once
     private void HideAllAnnotationImages()
     {
@@ -875,6 +957,15 @@ public class GameManager : MonoBehaviour
             if (trialInRun == trialsPerRun - 1 && run < totalRuns - 1)
             {
                 Debug.Log($"---------- Run {run + 1} Finished ----------");
+
+                // --- NEW LOGIC: RUN FEEDBACK ---
+                int outcomeIndex = feedbackTrialOutcomes.Count - 1; // Last added outcome
+                if (outcomeIndex >= 0)
+                {
+                    yield return StartCoroutine(DisplayRunFeedback(feedbackTrialOutcomes[outcomeIndex], run + 1));
+                }
+                // --- END NEW LOGIC: RUN FEEDBACK ---
+
                 DataLogger.FlushData();
                 SaveExperimentState();
 
@@ -912,6 +1003,74 @@ public class GameManager : MonoBehaviour
         Debug.Log("RunAllTrials: All runs completed.");
         EndTrials();
     }
+
+    // --- NEW METHOD: DISPLAY RUN FEEDBACK ---
+    IEnumerator DisplayRunFeedback(FeedbackTrialOutcome outcome, int runNumber)
+    {
+        trialPanel.SetActive(false);
+        fixationPanel.SetActive(false);
+        interRunPanel.SetActive(false); // Ensure inter-run panel is off
+
+        trainingFeedbackPanel.SetActive(true); // Re-use the training feedback panel
+        if (trainingContinueButton != null)
+        {
+            trainingContinueButton.gameObject.SetActive(false);
+        }
+
+        float totalPayoff = outcome.selfPayoff + outcome.otherPayoff;
+        string choice = outcome.participantChoice;
+
+        // Farsi text swap logic
+        string displayChoice = choice;
+        if (ShouldUseRTL())
+        {
+            if (choice == "A") displayChoice = "ب";
+            else if (choice == "B") displayChoice = "الف";
+        }
+
+        string partnerMessageKey = outcome.partnerFollowed ? "feedback_partner_followed" : "feedback_partner_ignored";
+
+        var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "run_feedback_message");
+        var partnerMessageTask = GetLocalizedStringAsync(UILocalizationTable, partnerMessageKey);
+        yield return new WaitUntil(() => feedbackFormatTask.IsCompleted && partnerMessageTask.IsCompleted);
+
+        string feedbackMessage;
+        if (feedbackFormatTask.IsFaulted || partnerMessageTask.IsFaulted)
+        {
+            Debug.LogError("LOCALIZATION ERROR: Could not find feedback keys. Using default English text.");
+            string partnerText = outcome.partnerFollowed ? "Your Partner has followed your message" : "Your Partner has gone against your message";
+            feedbackMessage = $"--- End of Run {runNumber} ---\n\n" +
+                              $"Results for the randomly selected trial:\n" +
+                              $"You chose Option {displayChoice}.\n\n" +
+                              $"{partnerText}\n\n" +
+                              $"Your payoff: {outcome.selfPayoff}\n" +
+                              $"Other player's payoff: {outcome.otherPayoff}\n\n" +
+                              $"Total payoff for this choice: {totalPayoff}\n\n" +
+                              $"Press SPACE to continue.";
+        }
+        else
+        {
+            string localizedFormat = feedbackFormatTask.Result;
+            string partnerMessage = partnerMessageTask.Result;
+            feedbackMessage = string.Format(localizedFormat, runNumber, displayChoice, partnerMessage, outcome.selfPayoff, outcome.otherPayoff, totalPayoff);
+        }
+
+        trainingFeedbackText.text = feedbackMessage;
+        DataLogger.LogInterRunStart(0); // Log break start
+
+        bool continuePressed = false;
+        while (!continuePressed)
+        {
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                continuePressed = true;
+            }
+            yield return null;
+        }
+
+        trainingFeedbackPanel.SetActive(false);
+    }
+    // --- END NEW METHOD: DISPLAY RUN FEEDBACK ---
 
     private void DeleteStateFile()
     {
@@ -1002,6 +1161,7 @@ public class GameManager : MonoBehaviour
     IEnumerator RunTrial(SignallingTaskData.TrialData trial, int eventNumber)
     {
         int totalEventCount = (currentTrialList?.Count ?? 0) + (attentionTests?.Count ?? 0);
+        // Corrected property access: trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other
         Debug.Log($"RunTrial {eventNumber}/{totalEventCount}: Start. Type: {currentTask}. A:[{trial.optionA_Self},{trial.optionA_Other}], B:[{trial.optionB_Self},{trial.optionB_Other}]");
         optionAButton?.gameObject.SetActive(true);
         optionBButton?.gameObject.SetActive(true);
@@ -1018,12 +1178,13 @@ public class GameManager : MonoBehaviour
             trialInfoText.text = string.Format(trialInfoFormatTask.Result, eventNumber, totalEventCount);
         }
         else
-        { 
-            trialInfoText.text = $"Event {eventNumber}/{totalEventCount}"; 
+        {
+            trialInfoText.text = $"Event {eventNumber}/{totalEventCount}";
         }
 
         if (barChartManager != null)
         {
+            // Corrected property access
             barChartManager.CreateBarChart(trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other);
         }
         else { Debug.LogWarning($"RunTrial {eventNumber}: BarChartManager not found."); }
@@ -1062,6 +1223,43 @@ public class GameManager : MonoBehaviour
 
         List<float> barData = new List<float> { trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other };
         DataLogger.LogTrial(eventNumber, currentTask.ToString(), messageChosen, responseTime, barData);
+
+        // --- NEW LOGIC: Check for Feedback Trial and Save Outcome ---
+        int trialListIndex = currentTrialList.IndexOf(trial);
+
+        // The first regular trial of the run is chosen for feedback
+        // Check if the current event is a regular trial AND the first trial slot in the run
+        if (!attentionTestIndices.Contains(eventNumber - 1) && (eventNumber - 1) % trialsPerRun == 0)
+        {
+            float selfPayoff, otherPayoff;
+            bool partnerFollowed = Random.value > 0.3f; // 70% chance to follow
+
+            if (partnerFollowed)
+            {
+                // Corrected property access
+                if (messageChosen == "A") { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
+                else { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
+            }
+            else
+            {
+                // Partner ignores the message (chooses the opposite option)
+                // Corrected property access
+                if (messageChosen == "A") { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
+                else { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
+            }
+
+            feedbackTrialOutcomes.Add(new FeedbackTrialOutcome
+            {
+                originalTrialListIndex = trialListIndex,
+                participantChoice = messageChosen,
+                selfPayoff = selfPayoff,
+                otherPayoff = otherPayoff,
+                partnerFollowed = partnerFollowed
+            });
+            DataLogger.LogFeedbackTrial(eventNumber, selfPayoff, otherPayoff, partnerFollowed, messageChosen);
+            Debug.Log($"RunTrial {eventNumber}: Chosen for Run Feedback. Self: {selfPayoff}, Other: {otherPayoff}");
+        }
+        // --- END NEW LOGIC ---
 
         float confirmationDuration = Random.Range(decisionConfirmationMin, decisionConfirmationMax);
         Debug.Log($"RunTrial {eventNumber}: Confirmation Phase ({confirmationDuration:F2}s)");
@@ -1276,20 +1474,44 @@ public class GameManager : MonoBehaviour
         Debug.Log($"EndExperiment: Final data flush requested.");
         DeleteStateFile(); // <-- ADD THIS LINE
 
+        // --- NEW LOGIC: Calculate and Display Final Payoff ---
+        float finalSelfPayoff = 0;
+        float finalOtherPayoff = 0;
+        foreach (var outcome in feedbackTrialOutcomes)
+        {
+            finalSelfPayoff += outcome.selfPayoff;
+            finalOtherPayoff += outcome.otherPayoff;
+        }
+        float finalTotalPayoff = finalSelfPayoff + finalOtherPayoff;
+
+        // Get localized final message parts
+        var endMessageTask = GetLocalizedStringAsync(UILocalizationTable, "end_experiment_text");
+        var payoffSummaryTask = GetLocalizedStringAsync(UILocalizationTable, "final_payoff_summary");
+
+        await Task.WhenAll(endMessageTask, payoffSummaryTask);
+
+        string endMessage = endMessageTask.IsCompletedSuccessfully ? endMessageTask.Result : "[end_experiment_text]";
+        string payoffSummary;
+
+        if (payoffSummaryTask.IsCompletedSuccessfully)
+        {
+            payoffSummary = string.Format(payoffSummaryTask.Result, finalSelfPayoff, finalOtherPayoff, finalTotalPayoff, feedbackTrialOutcomes.Count);
+        }
+        else
+        {
+            Debug.LogError("LOCALIZATION ERROR: Failed to load final payoff summary. Using default.");
+            payoffSummary = $"\n\n--- FINAL PAYOFF SUMMARY (Based on {feedbackTrialOutcomes.Count} trials) ---\n" +
+                            $"Your Total Payoff: {finalSelfPayoff}\n" +
+                            $"Other Player's Total Payoff: {finalOtherPayoff}\n" +
+                            $"Grand Total: {finalTotalPayoff}";
+        }
+        // --- END NEW LOGIC ---
+
         if (instructionPanel != null && instructionText != null)
         {
             instructionPanel.SetActive(true);
-            try
-            {
-                var endMessageTask = GetLocalizedStringAsync(UILocalizationTable, "end_experiment_text");
-                instructionText.text = await endMessageTask;
-                Debug.Log("EndExperiment: End message loaded and displayed.");
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Failed to get localized end message: {ex.Message}");
-                instructionText.text = "[end_experiment_text]";
-            }
+            instructionText.text = endMessage + payoffSummary; // Combine the two texts
+            Debug.Log("EndExperiment: End message and payoff summary loaded and displayed.");
         }
         else
         {
@@ -1350,7 +1572,7 @@ public class GameManager : MonoBehaviour
         if (textComponent != null)
         {
             textComponent.text = text;
-        } 
+        }
     }
 
     void SetButtonTransparency(Image buttonImage, float alpha)
@@ -1360,7 +1582,7 @@ public class GameManager : MonoBehaviour
             Color currentColor = buttonImage.color;
             currentColor.a = Mathf.Clamp01(alpha);
             buttonImage.color = currentColor;
-        } 
+        }
     }
 
     private void ShuffleTrials(List<SignallingTaskData.TrialData> list)

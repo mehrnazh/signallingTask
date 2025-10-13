@@ -136,6 +136,46 @@ MonoBehaviour:
     m_Localized: Your Partner has made their choice against the information you shared
     m_Metadata:
       m_Items: []
+  - m_Id: 69488228598538240
+    m_Localized: '--- End of Run {0} ---
+
+
+      Results for the randomly selected
+      trial:
+
+      You chose Option {1}.
+
+
+      **{2}**
+
+
+      Your payoff: {3}
+
+      Other
+      player''s payoff: {4}\n\nTotal payoff for this choice: {5}
+
+
+      Press SPACE
+      to continue.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 69488320114057216
+    m_Localized: '
+
+
+      --- FINAL PAYOFF SUMMARY (Based on {3} trials) ---
+
+      Your
+      Total Payoff: {0}
+
+
+      Grand Total: {2}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 70162288059867136
+    m_Localized: Training {0} of {1}
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
