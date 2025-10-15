@@ -42,7 +42,13 @@ public class GameManager : MonoBehaviour
     public TMP_Text instructionText;
     public TMP_Text trialInfoText;
     public TMP_Text interRunText;
-    public TMP_Text TrialInstructionText; // <-- ADDED
+    public TMP_Text TrialInstructionText;
+
+    [Header("Feedback Visuals")]
+    public RectTransform FeedbackChartContainer; // Assign the RUQ chart container here.
+    public Transform FeedbackGroupAContainer; // <-- ADD THIS
+    public Transform FeedbackGroupBContainer; // <-- ADD THIS
+    public RectTransform FeedbackGroupLabelsContainer; // <-- ADD THIS
 
     [Header("Buttons")]
     public Button optionAButton;
@@ -131,7 +137,7 @@ public class GameManager : MonoBehaviour
     private List<SignallingTaskData.AttentionTestData> attentionTests = new List<SignallingTaskData.AttentionTestData>();
     private HashSet<int> attentionTestIndices = new HashSet<int>();
     private Dictionary<int, int> attentionTestIndexToTestIndex = new Dictionary<int, int>();
-    private List<FeedbackTrialOutcome> feedbackTrialOutcomes = new List<FeedbackTrialOutcome>(); // NEW FIELD
+    private List<FeedbackTrialOutcome> feedbackTrialOutcomes = new List<FeedbackTrialOutcome>();
 
     private bool decisionMade = false;
     private bool selectionEnabled = false;
@@ -364,7 +370,8 @@ public class GameManager : MonoBehaviour
         if (barChartManager == null) Debug.LogWarning("BarChartManager not found in the scene.");
         if (legendManager == null) Debug.LogWarning("LegendManager not found in the scene.");
         if (instructionManager == null) Debug.LogWarning("InstructionManager not found during InitializeComponents. Will check again later.");
-        if (TrialInstructionText == null) Debug.LogWarning("TrialInstructionText is not assigned in the Inspector!"); // ADDED WARNING
+        if (TrialInstructionText == null) Debug.LogWarning("TrialInstructionText is not assigned in the Inspector!");
+        if (FeedbackChartContainer == null) Debug.LogWarning("FeedbackChartContainer is not assigned in the Inspector! RUQ chart will not show during feedback.");
 
         SetButtonInteraction(false);
     }
@@ -587,7 +594,7 @@ public class GameManager : MonoBehaviour
         trialInfoText.text = "Training";
 
         // Load the localized template string once before the loop
-        Task<string> instructionFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_info"); // NEW KEY
+        Task<string> instructionFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_progress"); // <-- Semantic Key
 
         for (int i = 0; i < trainingTrials.Count; i++)
         {
@@ -644,9 +651,9 @@ public class GameManager : MonoBehaviour
                                 currentAnnotationIndex--;
                                 moved = true;
                             }
-                            else // Already at index 0, but still allow timer to run
+                            else
                             {
-                                // Log/debug if necessary
+                                // At the beginning, wait for timer to expire or for RightArrow key
                             }
                         }
                         yield return null;
@@ -768,7 +775,7 @@ public class GameManager : MonoBehaviour
                 else if (choice == "B") displayChoice = "الف";
             }
 
-            string partnerMessageKey = partnerFollowed ? "feedback_partner_followed" : "feedback_partner_ignored";
+            string partnerMessageKey = partnerFollowed ? "partner_followed_msg" : "partner_ignored_msg";
 
             var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_feedback_message");
             var partnerMessageTask = GetLocalizedStringAsync(UILocalizationTable, partnerMessageKey);
@@ -850,7 +857,7 @@ public class GameManager : MonoBehaviour
             Debug.LogWarning("ShowAnnotation called, but no sprite was assigned in the Inspector.");
         }
     }
-    
+
     // MODIFIED: Helper function to hide all annotation IMAGES at once
     private void HideAllAnnotationImages()
     {
@@ -875,6 +882,7 @@ public class GameManager : MonoBehaviour
             annotationImageCenterSmall.sprite = null;
         }
     }
+
 
     IEnumerator RunAllTrials()
     {
@@ -1003,34 +1011,86 @@ public class GameManager : MonoBehaviour
         Debug.Log("RunAllTrials: All runs completed.");
         EndTrials();
     }
-
-    // --- NEW METHOD: DISPLAY RUN FEEDBACK ---
     IEnumerator DisplayRunFeedback(FeedbackTrialOutcome outcome, int runNumber)
     {
         trialPanel.SetActive(false);
         fixationPanel.SetActive(false);
-        interRunPanel.SetActive(false); // Ensure inter-run panel is off
+        interRunPanel.SetActive(false);
 
-        trainingFeedbackPanel.SetActive(true); // Re-use the training feedback panel
+        // Activate the panel where feedback text and the RUQ chart will appear
+        trainingFeedbackPanel.SetActive(true);
+        // Hide the button used in training, as we want to wait for the space key
         if (trainingContinueButton != null)
         {
             trainingContinueButton.gameObject.SetActive(false);
         }
 
-        float totalPayoff = outcome.selfPayoff + outcome.otherPayoff;
-        string choice = outcome.participantChoice;
 
-        // Farsi text swap logic
-        string displayChoice = choice;
+        // --- CRITICAL SWAP LOGIC ---
+        // Temporarily swap BarChartManager's targets to the Feedback RUQ duplicates
+        RectTransform originalChartContainer = null;
+        Transform originalGroupA = null;
+        Transform originalGroupB = null;
+        RectTransform originalLabels = null;
+
+        if (barChartManager != null && FeedbackChartContainer != null)
+        {
+            // 1. Store originals
+            originalChartContainer = barChartManager.chartContainer;
+            originalGroupA = barChartManager.groupAContainer;
+            originalGroupB = barChartManager.groupBContainer;
+            originalLabels = barChartManager.groupLabelsContainer;
+
+            // 2. Swap targets to the Feedback RUQ duplicates
+            barChartManager.chartContainer = FeedbackChartContainer;
+            barChartManager.groupAContainer = FeedbackGroupAContainer;
+            barChartManager.groupBContainer = FeedbackGroupBContainer;
+            barChartManager.groupLabelsContainer = FeedbackGroupLabelsContainer;
+
+            // 3. Activate the new container
+            FeedbackChartContainer.gameObject.SetActive(true);
+
+            Debug.Log($"Chart Swap: BCM target temporarily set to {FeedbackChartContainer.name}.");
+        }
+        // --- END CRITICAL SWAP LOGIC ---
+
+        // --- DRAW CHART LOGIC ---
+        if (barChartManager != null && barChartManager.chartContainer != null)
+        {
+            // Look up the original trial data and draw the chart
+            if (outcome.originalTrialListIndex >= 0 && outcome.originalTrialListIndex < currentTrialList.Count)
+            {
+                SignallingTaskData.TrialData originalTrial = currentTrialList[outcome.originalTrialListIndex];
+
+                barChartManager.CreateBarChart(
+                    originalTrial.optionA_Self,
+                    originalTrial.optionA_Other,
+                    originalTrial.optionB_Self,
+                    originalTrial.optionB_Other);
+
+                Debug.Log($"Displaying bar chart in Feedback RUQ.");
+            }
+            else
+            {
+                Debug.LogError($"Cannot display bar chart: Original trial index {outcome.originalTrialListIndex} is out of bounds.");
+            }
+        }
+        // --- END DRAW CHART LOGIC ---
+
+        // --- DISPLAY FEEDBACK MESSAGE LOGIC ---
+        float totalPayoff = outcome.selfPayoff + outcome.otherPayoff;
+        string displayChoice = outcome.participantChoice;
+
+        // Farsi Text Swap (A becomes 'ب', B becomes 'الف')
         if (ShouldUseRTL())
         {
-            if (choice == "A") displayChoice = "ب";
-            else if (choice == "B") displayChoice = "الف";
+            if (displayChoice == "A") displayChoice = "ب";
+            else if (displayChoice == "B") displayChoice = "الف";
         }
 
-        string partnerMessageKey = outcome.partnerFollowed ? "feedback_partner_followed" : "feedback_partner_ignored";
+        string partnerMessageKey = outcome.partnerFollowed ? "partner_followed_msg" : "partner_ignored_msg";
 
-        var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "run_feedback_message");
+        var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_feedback_message");
         var partnerMessageTask = GetLocalizedStringAsync(UILocalizationTable, partnerMessageKey);
         yield return new WaitUntil(() => feedbackFormatTask.IsCompleted && partnerMessageTask.IsCompleted);
 
@@ -1038,26 +1098,24 @@ public class GameManager : MonoBehaviour
         if (feedbackFormatTask.IsFaulted || partnerMessageTask.IsFaulted)
         {
             Debug.LogError("LOCALIZATION ERROR: Could not find feedback keys. Using default English text.");
-            string partnerText = outcome.partnerFollowed ? "Your Partner has followed your message" : "Your Partner has gone against your message";
-            feedbackMessage = $"--- End of Run {runNumber} ---\n\n" +
-                              $"Results for the randomly selected trial:\n" +
-                              $"You chose Option {displayChoice}.\n\n" +
-                              $"{partnerText}\n\n" +
-                              $"Your payoff: {outcome.selfPayoff}\n" +
-                              $"Other player's payoff: {outcome.otherPayoff}\n\n" +
-                              $"Total payoff for this choice: {totalPayoff}\n\n" +
-                              $"Press SPACE to continue.";
+            string partnerText = outcome.partnerFollowed ? "Your Partner has made their choice based on the information you shared" : "Your Partner has made their choice against the information you shared";
+            feedbackMessage = $"Feedback for Run {runNumber}:\nYou chose Option {displayChoice}.\n\n{partnerText}\n\nYour payoff is: {outcome.selfPayoff}\nThe other player's payoff is: {outcome.otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}\n\nPress SPACE to continue.";
         }
         else
         {
             string localizedFormat = feedbackFormatTask.Result;
             string partnerMessage = partnerMessageTask.Result;
-            feedbackMessage = string.Format(localizedFormat, runNumber, displayChoice, partnerMessage, outcome.selfPayoff, outcome.otherPayoff, totalPayoff);
+            feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, outcome.selfPayoff, outcome.otherPayoff, totalPayoff);
+            // Ensure "Press SPACE to continue." is added if the format string doesn't include it (it often doesn't)
+            if (!feedbackMessage.Contains("SPACE"))
+            {
+                feedbackMessage += "\n\nPress SPACE to continue.";
+            }
         }
-
         trainingFeedbackText.text = feedbackMessage;
-        DataLogger.LogInterRunStart(0); // Log break start
+        // --- END DISPLAY FEEDBACK MESSAGE LOGIC ---
 
+        // **CRITICAL FIX: WAIT FOR SPACE KEY**
         bool continuePressed = false;
         while (!continuePressed)
         {
@@ -1067,11 +1125,35 @@ public class GameManager : MonoBehaviour
             }
             yield return null;
         }
+        // **END CRITICAL FIX**
+
+        // --- RESTORE SWAP LOGIC ---
+        if (barChartManager != null && originalChartContainer != null)
+        {
+            // Restore all original references
+            barChartManager.chartContainer = originalChartContainer;
+            barChartManager.groupAContainer = originalGroupA;
+            barChartManager.groupBContainer = originalGroupB;
+            barChartManager.groupLabelsContainer = originalLabels;
+
+            // Hide the RUQ chart
+            if (FeedbackChartContainer != null)
+            {
+                FeedbackChartContainer.gameObject.SetActive(false);
+            }
+
+            // Hide the original chart's containers as well, if they are separate children, 
+            // to prevent them from showing during the inter-run break.
+            if (originalChartContainer != null)
+            {
+                // Note: You may need to handle the state of the original chart container based on your scene setup.
+                // For now, we only focus on hiding the *Feedback* chart.
+            }
+        }
+        // --- END RESTORE SWAP LOGIC ---
 
         trainingFeedbackPanel.SetActive(false);
     }
-    // --- END NEW METHOD: DISPLAY RUN FEEDBACK ---
-
     private void DeleteStateFile()
     {
         string filePath = GetStateFilePath(this.participantId, this.currentTask.ToString(), this.currentSeries);
@@ -1161,7 +1243,7 @@ public class GameManager : MonoBehaviour
     IEnumerator RunTrial(SignallingTaskData.TrialData trial, int eventNumber)
     {
         int totalEventCount = (currentTrialList?.Count ?? 0) + (attentionTests?.Count ?? 0);
-        // Corrected property access: trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other
+        // Corrected property access to use underscores: optionA_Self, optionA_Other, optionB_Self, optionB_Other
         Debug.Log($"RunTrial {eventNumber}/{totalEventCount}: Start. Type: {currentTask}. A:[{trial.optionA_Self},{trial.optionA_Other}], B:[{trial.optionB_Self},{trial.optionB_Other}]");
         optionAButton?.gameObject.SetActive(true);
         optionBButton?.gameObject.SetActive(true);
@@ -1170,6 +1252,19 @@ public class GameManager : MonoBehaviour
         decisionMade = false;
         trialPanel.SetActive(true);
         fixationPanel.SetActive(false);
+
+        // --- CHART ACTIVATION (TRIAL) ---
+        // 1. Ensure the main trial chart is visible
+        if (barChartManager != null && barChartManager.chartContainer != null)
+        {
+            barChartManager.chartContainer.gameObject.SetActive(true);
+        }
+        // 2. Hide the duplicate RUQ chart
+        if (FeedbackChartContainer != null)
+        {
+            FeedbackChartContainer.gameObject.SetActive(false);
+        }
+        // --- END CHART ACTIVATION ---
 
         Task<string> trialInfoFormatTask = GetLocalizedStringAsync(UILocalizationTable, "trial_info");
         yield return new WaitUntil(() => trialInfoFormatTask.IsCompleted);
@@ -1184,7 +1279,7 @@ public class GameManager : MonoBehaviour
 
         if (barChartManager != null)
         {
-            // Corrected property access
+            // Corrected property access to use underscores
             barChartManager.CreateBarChart(trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other);
         }
         else { Debug.LogWarning($"RunTrial {eventNumber}: BarChartManager not found."); }
@@ -1236,14 +1331,14 @@ public class GameManager : MonoBehaviour
 
             if (partnerFollowed)
             {
-                // Corrected property access
+                // Corrected property access to use underscores
                 if (messageChosen == "A") { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
                 else { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
             }
             else
             {
                 // Partner ignores the message (chooses the opposite option)
-                // Corrected property access
+                // Corrected property access to use underscores
                 if (messageChosen == "A") { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
                 else { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
             }
@@ -1286,6 +1381,19 @@ public class GameManager : MonoBehaviour
         decisionMade = false;
         trialPanel.SetActive(true);
         fixationPanel.SetActive(false);
+
+        // --- CHART ACTIVATION (TRIAL) ---
+        // 1. Ensure the main trial chart is visible
+        if (barChartManager != null && barChartManager.chartContainer != null)
+        {
+            barChartManager.chartContainer.gameObject.SetActive(true);
+        }
+        // 2. Hide the duplicate RUQ chart
+        if (FeedbackChartContainer != null)
+        {
+            FeedbackChartContainer.gameObject.SetActive(false);
+        }
+        // --- END CHART ACTIVATION ---
 
         Task<string> trialInfoFormatTask = GetLocalizedStringAsync(UILocalizationTable, "trial_info");
         yield return new WaitUntil(() => trialInfoFormatTask.IsCompleted);
@@ -1472,7 +1580,7 @@ public class GameManager : MonoBehaviour
 
         DataLogger.SaveData(participantId, currentTask.ToString(), currentSeries);
         Debug.Log($"EndExperiment: Final data flush requested.");
-        DeleteStateFile(); // <-- ADD THIS LINE
+        DeleteStateFile();
 
         // --- NEW LOGIC: Calculate and Display Final Payoff ---
         float finalSelfPayoff = 0;
@@ -1495,13 +1603,18 @@ public class GameManager : MonoBehaviour
 
         if (payoffSummaryTask.IsCompletedSuccessfully)
         {
-            payoffSummary = string.Format(payoffSummaryTask.Result, finalSelfPayoff, finalOtherPayoff, finalTotalPayoff, feedbackTrialOutcomes.Count);
+            // Pass all four parameters, even if the localized string only uses {0}, {2}, and {3}.
+            payoffSummary = string.Format(payoffSummaryTask.Result,
+                                          finalSelfPayoff,
+                                          finalOtherPayoff,
+                                          finalTotalPayoff,
+                                          feedbackTrialOutcomes.Count);
         }
         else
         {
             Debug.LogError("LOCALIZATION ERROR: Failed to load final payoff summary. Using default.");
             payoffSummary = $"\n\n--- FINAL PAYOFF SUMMARY (Based on {feedbackTrialOutcomes.Count} trials) ---\n" +
-                            $"Your Total Payoff: {finalSelfPayoff}\n" +
+                            $"Your Total Payoff (from sampled trials): {finalSelfPayoff}\n" +
                             $"Other Player's Total Payoff: {finalOtherPayoff}\n" +
                             $"Grand Total: {finalTotalPayoff}";
         }

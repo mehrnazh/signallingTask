@@ -42,6 +42,10 @@
 //    public TMP_Text instructionText;
 //    public TMP_Text trialInfoText;
 //    public TMP_Text interRunText;
+//    public TMP_Text TrialInstructionText; // <-- ADDED
+
+//    [Header("Feedback Visuals")] // <-- NEW HEADER
+//    public RectTransform FeedbackChartContainer; // <-- ADDED: Assign the RUQ chart container here.
 
 //    [Header("Buttons")]
 //    public Button optionAButton;
@@ -363,6 +367,8 @@
 //        if (barChartManager == null) Debug.LogWarning("BarChartManager not found in the scene.");
 //        if (legendManager == null) Debug.LogWarning("LegendManager not found in the scene.");
 //        if (instructionManager == null) Debug.LogWarning("InstructionManager not found during InitializeComponents. Will check again later.");
+//        if (TrialInstructionText == null) Debug.LogWarning("TrialInstructionText is not assigned in the Inspector!");
+//        if (FeedbackChartContainer == null) Debug.LogWarning("FeedbackChartContainer is not assigned in the Inspector! RUQ chart will not show during feedback."); // ADDED WARNING
 
 //        SetButtonInteraction(false);
 //    }
@@ -412,38 +418,10 @@
 //        if (currentTask == TaskType.Deception)
 //        {
 //            currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-//            //if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-//            //{
-//            //    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-//            //    Debug.Log($"Loaded {currentTrialList.Count} Deception trials.");
-//            //}
-//            //else
-//            //{
-//            //    Debug.LogError("SignallingTrialLoader.Instance.DeceptionTrials is null or empty! Cannot proceed.");
-//            //    currentTrialList = new List<SignallingTaskData.TrialData>();
-//            //}
 //        }
 //        else
 //        {
 //            currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
-//            //if (SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials.Count > 0)
-//            //{
-//            //    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
-//            //    Debug.Log($"Loaded {currentTrialList.Count} Control trials.");
-//            //}
-//            //else
-//            //{
-//            //    Debug.LogWarning("SignallingTrialLoader.Instance.ControlTrials is null or empty. Using Deception trials as fallback for Control task.");
-//            //    if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-//            //    {
-//            //        currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-//            //    }
-//            //    else
-//            //    {
-//            //        Debug.LogError("Fallback failed: SignallingTrialLoader.Instance.DeceptionTrials is also null or empty! Cannot proceed.");
-//            //        currentTrialList = new List<SignallingTaskData.TrialData>();
-//            //    }
-//            //}
 //        }
 
 //        ShuffleTrials(currentTrialList);
@@ -584,26 +562,89 @@
 //        trialPanel.SetActive(true);
 //        trialInfoText.text = "Training";
 
+//        // Load the localized template string once before the loop
+//        Task<string> instructionFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_progress"); // <-- Semantic Key
+
 //        for (int i = 0; i < trainingTrials.Count; i++)
 //        {
 //            TrainingTrial training = trainingTrials[i];
 //            Debug.Log($"Starting training trial {i + 1}/{trainingTrials.Count}");
 
+//            // --- Update Training Instruction Text ---
+//            if (TrialInstructionText != null)
+//            {
+//                yield return new WaitUntil(() => instructionFormatTask.IsCompleted);
+//                string localizedFormat = instructionFormatTask.IsCompletedSuccessfully ? instructionFormatTask.Result : "Training {0} of {1}";
+
+//                TrialInstructionText.text = string.Format(localizedFormat, i + 1, trainingTrials.Count);
+//            }
+//            // --- End Update Training Instruction Text ---
+
 //            barChartManager.CreateBarChart(training.optionASelf, training.optionAOther, training.optionBSelf, training.optionBOther);
 
 //            if (i == 0)
 //            {
-//                yield return ShowAnnotation(training.annotation1, 2.0f);
-//                yield return ShowAnnotation(training.annotation2, 2.0f);
+//                float annotationDuration = 2.0f;
+
+//                // --- MODIFIED: Bi-directional Annotation Navigation Logic ---
+//                TrainingTrial.Annotation[] annotationsToShow = {
+//                    training.annotation1,
+//                    training.annotation2,
+//                    training.annotation3,
+//                    training.annotation4,
+//                    training.annotation5,
+//                    training.annotation6
+//                };
+
+//                int currentAnnotationIndex = 0;
+//                while (currentAnnotationIndex < annotationsToShow.Length)
+//                {
+//                    // Always show the current annotation
+//                    yield return ShowAnnotation(annotationsToShow[currentAnnotationIndex], annotationDuration);
+
+//                    // Start timer/key wait
+//                    float startTime = Time.realtimeSinceStartup;
+//                    bool moved = false;
+//                    while (Time.realtimeSinceStartup < startTime + annotationDuration && !moved)
+//                    {
+//                        if (Input.GetKeyDown(KeyCode.RightArrow))
+//                        {
+//                            currentAnnotationIndex++;
+//                            moved = true;
+//                        }
+//                        else if (Input.GetKeyDown(KeyCode.LeftArrow))
+//                        {
+//                            // Decrement, but don't go below the start (index 0)
+//                            if (currentAnnotationIndex > 0)
+//                            {
+//                                currentAnnotationIndex--;
+//                                moved = true;
+//                            }
+//                            else
+//                            {
+//                                // At the beginning, wait for timer to expire or for RightArrow key
+//                            }
+//                        }
+//                        yield return null;
+//                    }
+
+//                    // If the timer ran out and no key was pressed, automatically advance
+//                    if (!moved)
+//                    {
+//                        currentAnnotationIndex++;
+//                    }
+
+//                    // Special case: If index is 2 or 4 (after 2nd or 4th annotation), hide all and pause briefly
+//                    if (currentAnnotationIndex == 2 || currentAnnotationIndex == 4)
+//                    {
+//                        HideAllAnnotationImages();
+//                        yield return StartCoroutine(WaitPrecise(0.5f));
+//                    }
+//                }
+
+//                // Final cleanup after the loop
 //                HideAllAnnotationImages();
-//                yield return StartCoroutine(WaitPrecise(0.5f));
-//                yield return ShowAnnotation(training.annotation3, 2.0f);
-//                yield return ShowAnnotation(training.annotation4, 2.0f);
-//                HideAllAnnotationImages();
-//                yield return StartCoroutine(WaitPrecise(0.5f));
-//                yield return ShowAnnotation(training.annotation5, 2.0f);
-//                yield return ShowAnnotation(training.annotation6, 2.0f);
-//                HideAllAnnotationImages();
+//                // --- END MODIFIED: Bi-directional Annotation Navigation Logic ---
 //            }
 
 //            Debug.Log("Training: Displaying decision buttons.");
@@ -611,10 +652,8 @@
 //            optionBButton.gameObject.SetActive(true);
 
 //            // --- MODIFICATION START (Button Delay) ---
-//            // NEW: Set buttons to be visible but not interactable at first.
 //            SetButtonInteraction(false);
 
-//            // Load the button text while they are inactive
 //            string optionAKey = (currentTask == TaskType.Deception) ? "deception_option_a" : "control_option_a";
 //            string optionBKey = (currentTask == TaskType.Deception) ? "deception_option_b" : "control_option_b";
 
@@ -634,7 +673,7 @@
 //                SetButtonText(optionBButtonText, taskB.Result);
 //            }
 
-//            // NEW: Wait for 2 seconds before allowing a decision (onset phase).
+//            // Wait for 2 seconds before allowing a decision (onset phase).
 //            yield return StartCoroutine(WaitPrecise(2.0f));
 
 //            Debug.Log("Training: Activating decision buttons.");
@@ -666,6 +705,7 @@
 //            Debug.Log($"Training: Participant chose option {choice}.");
 //            SetButtonInteraction(false);
 
+//            // Post-Decision Annotations: Use the fixed timer wait.
 //            if (choice == "A")
 //                yield return ShowAnnotation(training.postDecisionAnnotationA, 3.0f);
 //            else
@@ -696,8 +736,7 @@
 //            }
 //            float totalPayoff = selfPayoff + otherPayoff;
 
-//            // --- MODIFICATION START (Farsi Text Swap) ---
-//            // NEW: Create a display variable for the choice text.
+//            // --- Farsi Text Swap ---
 //            string displayChoice = choice;
 //            if (ShouldUseRTL())
 //            {
@@ -705,7 +744,7 @@
 //                else if (choice == "B") displayChoice = "الف";
 //            }
 
-//            string partnerMessageKey = partnerFollowed ? "feedback_partner_followed" : "feedback_partner_ignored";
+//            string partnerMessageKey = partnerFollowed ? "partner_followed_msg" : "partner_ignored_msg";
 
 //            var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_feedback_message");
 //            var partnerMessageTask = GetLocalizedStringAsync(UILocalizationTable, partnerMessageKey);
@@ -722,10 +761,9 @@
 //            {
 //                string localizedFormat = feedbackFormatTask.Result;
 //                string partnerMessage = partnerMessageTask.Result;
-//                // MODIFIED: Use 'displayChoice' instead of 'choice' in the final message.
 //                feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, selfPayoff, otherPayoff, totalPayoff);
 //            }
-//            // --- MODIFICATION END (Farsi Text Swap) ---
+//            // --- End Farsi Text Swap ---
 
 //            trainingFeedbackText.text = feedbackMessage;
 
@@ -743,12 +781,18 @@
 //            trialPanel.SetActive(true);
 //        }
 
+//        // Clear the instruction text after training is complete
+//        if (TrialInstructionText != null)
+//        {
+//            TrialInstructionText.text = "";
+//        }
+
 //        trialPanel.SetActive(false);
 //        Debug.Log("--- Training Session Complete ---");
 //    }
-//    // In GameManager.cs
 
-//    // MODIFIED: Helper function to show a specific annotation IMAGE
+//    // --- REMOVED: WaitForAnnotationDisplayOrKey is now integrated into RunTrainingSession. ---
+
 //    private IEnumerator ShowAnnotation(TrainingTrial.Annotation annotation, float duration)
 //    {
 //        Image targetImage = null;
@@ -774,7 +818,8 @@
 //            targetImage.sprite = annotation.image;
 //            targetImage.color = Color.white; // Make it fully visible
 //            targetImage.gameObject.SetActive(true);
-//            yield return StartCoroutine(WaitPrecise(duration));
+//            yield return null; // Wait 1 frame after showing
+//            // Note: The duration is handled by the caller (RunTrainingSession loop logic)
 //        }
 //        else if (annotation.image == null)
 //        {
@@ -934,7 +979,6 @@
 //        Debug.Log("RunAllTrials: All runs completed.");
 //        EndTrials();
 //    }
-
 //    // --- NEW METHOD: DISPLAY RUN FEEDBACK ---
 //    IEnumerator DisplayRunFeedback(FeedbackTrialOutcome outcome, int runNumber)
 //    {
@@ -961,7 +1005,7 @@
 
 //        string partnerMessageKey = outcome.partnerFollowed ? "feedback_partner_followed" : "feedback_partner_ignored";
 
-//        var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "run_feedback_message"); // NEW LOCALIZATION KEY
+//        var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "run_feedback_message");
 //        var partnerMessageTask = GetLocalizedStringAsync(UILocalizationTable, partnerMessageKey);
 //        yield return new WaitUntil(() => feedbackFormatTask.IsCompleted && partnerMessageTask.IsCompleted);
 
@@ -1057,7 +1101,6 @@
 //                    {
 //                        attentionTestIndexToTestIndex[sortedIndices[i]] = i;
 //                    }
-
 //                    Debug.Log($"<color=green>State successfully loaded. Resuming from event number {this.startEventIndex + 1}.</color>");
 //                    isDataLoaded = true;
 //                }
@@ -1101,6 +1144,19 @@
 //        trialPanel.SetActive(true);
 //        fixationPanel.SetActive(false);
 
+//        // --- CHART ACTIVATION (TRIAL) ---
+//        // 1. Ensure the main trial chart is visible
+//        if (barChartManager != null && barChartManager.chartContainer != null)
+//        {
+//            barChartManager.chartContainer.gameObject.SetActive(true);
+//        }
+//        // 2. Hide the duplicate RUQ chart
+//        if (FeedbackChartContainer != null)
+//        {
+//            FeedbackChartContainer.gameObject.SetActive(false);
+//        }
+//        // --- END CHART ACTIVATION ---
+
 //        Task<string> trialInfoFormatTask = GetLocalizedStringAsync(UILocalizationTable, "trial_info");
 //        yield return new WaitUntil(() => trialInfoFormatTask.IsCompleted);
 //        if (!trialInfoFormatTask.IsFaulted && !trialInfoFormatTask.IsCanceled)
@@ -1114,6 +1170,7 @@
 
 //        if (barChartManager != null)
 //        {
+//            // Corrected property access
 //            barChartManager.CreateBarChart(trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other);
 //        }
 //        else { Debug.LogWarning($"RunTrial {eventNumber}: BarChartManager not found."); }
@@ -1130,7 +1187,7 @@
 //        Debug.Log($"RunTrial {eventNumber}: Onset Phase ({trialOnsetDuration}s)");
 //        yield return StartCoroutine(WaitPrecise(trialOnsetDuration));
 
-//        Debug.Log($"RunTrial {eventNumber}: Decision Phase Start (Waiting for input)");
+//        //Debug.Log($"RunTrial {eventNumber}: Decision Phase Start (Waiting for input)");
 //        yield return new WaitForEndOfFrame();
 //        SetupTrialButtons();
 
@@ -1157,21 +1214,24 @@
 //        int trialListIndex = currentTrialList.IndexOf(trial);
 
 //        // The first regular trial of the run is chosen for feedback
-//        if (GetAdjustedTrialIndex(eventNumber - 1) == (eventNumber - 1) && (eventNumber - 1) % trialsPerRun == 0)
+//        // Check if the current event is a regular trial AND the first trial slot in the run
+//        if (!attentionTestIndices.Contains(eventNumber - 1) && (eventNumber - 1) % trialsPerRun == 0)
 //        {
 //            float selfPayoff, otherPayoff;
 //            bool partnerFollowed = Random.value > 0.3f; // 70% chance to follow
 
 //            if (partnerFollowed)
 //            {
+//                // Corrected property access
 //                if (messageChosen == "A") { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
-//                else { selfPayoff = trial.optionBSelf; otherPayoff = trial.optionBOther; }
+//                else { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
 //            }
 //            else
 //            {
 //                // Partner ignores the message (chooses the opposite option)
+//                // Corrected property access
 //                if (messageChosen == "A") { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
-//                else { selfPayoff = trial.optionASelf; otherPayoff = trial.optionAOther; }
+//                else { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
 //            }
 
 //            feedbackTrialOutcomes.Add(new FeedbackTrialOutcome
@@ -1412,7 +1472,7 @@
 
 //        // Get localized final message parts
 //        var endMessageTask = GetLocalizedStringAsync(UILocalizationTable, "end_experiment_text");
-//        var payoffSummaryTask = GetLocalizedStringAsync(UILocalizationTable, "final_payoff_summary"); // NEW LOCALIZATION KEY
+//        var payoffSummaryTask = GetLocalizedStringAsync(UILocalizationTable, "final_payoff_summary");
 
 //        await Task.WhenAll(endMessageTask, payoffSummaryTask);
 

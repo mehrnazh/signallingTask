@@ -80,11 +80,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 68418723726221312
-    m_Key: feedback_partner_followed
+    m_Key: partner_followed_msg
     m_Metadata:
       m_Items: []
   - m_Id: 68418844396347392
-    m_Key: feedback_partner_ignored
+    m_Key: partner_ignored_msg
     m_Metadata:
       m_Items: []
   - m_Id: 69488228598538240
@@ -96,7 +96,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 70162288059867136
-    m_Key: "training_progress\t"
+    m_Key: training_progress
     m_Metadata:
       m_Items: []
   m_Metadata:
