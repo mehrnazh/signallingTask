@@ -1695,8 +1695,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -488, y: -227.5}
-  m_SizeDelta: {x: -800, y: -1333}
+  m_AnchoredPosition: {x: -1091.15, y: -361.1}
+  m_SizeDelta: {x: -1920.7, y: -1006.60004}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &416176802
 MonoBehaviour:
@@ -2643,6 +2643,7 @@ MonoBehaviour:
   FeedbackGroupAContainer: {fileID: 2014633748}
   FeedbackGroupBContainer: {fileID: 1761194323}
   FeedbackGroupLabelsContainer: {fileID: 1069282641}
+  feedbackAnnotationLinePrefab: {fileID: 7431450063837886465, guid: 619ff5d2093ad1f4eb455a61420c12fa, type: 3}
   optionAButton: {fileID: 443359361}
   optionBButton: {fileID: 1094883929}
   endExperimentButton: {fileID: 561879211}
@@ -4644,8 +4645,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 364, y: -191}
-  m_SizeDelta: {x: 100, y: 100}
+  m_AnchoredPosition: {x: 374, y: -191}
+  m_SizeDelta: {x: 80.317, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1069282642
 MonoBehaviour:

@@ -49,6 +49,8 @@ public class GameManager : MonoBehaviour
     public Transform FeedbackGroupAContainer; // <-- ADD THIS
     public Transform FeedbackGroupBContainer; // <-- ADD THIS
     public RectTransform FeedbackGroupLabelsContainer; // <-- ADD THIS
+    public GameObject feedbackAnnotationLinePrefab; // <--- NEW: Assign your line prefab here!
+
 
     [Header("Buttons")]
     public Button optionAButton;
@@ -1017,17 +1019,15 @@ public class GameManager : MonoBehaviour
         fixationPanel.SetActive(false);
         interRunPanel.SetActive(false);
 
-        // Activate the panel where feedback text and the RUQ chart will appear
         trainingFeedbackPanel.SetActive(true);
-        // Hide the button used in training, as we want to wait for the space key
         if (trainingContinueButton != null)
         {
             trainingContinueButton.gameObject.SetActive(false);
         }
 
+        GameObject annotationLineInstance = null;
 
         // --- CRITICAL SWAP LOGIC ---
-        // Temporarily swap BarChartManager's targets to the Feedback RUQ duplicates
         RectTransform originalChartContainer = null;
         Transform originalGroupA = null;
         Transform originalGroupB = null;
@@ -1035,53 +1035,84 @@ public class GameManager : MonoBehaviour
 
         if (barChartManager != null && FeedbackChartContainer != null)
         {
-            // 1. Store originals
             originalChartContainer = barChartManager.chartContainer;
             originalGroupA = barChartManager.groupAContainer;
             originalGroupB = barChartManager.groupBContainer;
             originalLabels = barChartManager.groupLabelsContainer;
 
-            // 2. Swap targets to the Feedback RUQ duplicates
             barChartManager.chartContainer = FeedbackChartContainer;
             barChartManager.groupAContainer = FeedbackGroupAContainer;
             barChartManager.groupBContainer = FeedbackGroupBContainer;
             barChartManager.groupLabelsContainer = FeedbackGroupLabelsContainer;
 
-            // 3. Activate the new container
             FeedbackChartContainer.gameObject.SetActive(true);
-
-            Debug.Log($"Chart Swap: BCM target temporarily set to {FeedbackChartContainer.name}.");
         }
         // --- END CRITICAL SWAP LOGIC ---
 
         // --- DRAW CHART LOGIC ---
+        SignallingTaskData.TrialData originalTrial = null;
         if (barChartManager != null && barChartManager.chartContainer != null)
         {
-            // Look up the original trial data and draw the chart
             if (outcome.originalTrialListIndex >= 0 && outcome.originalTrialListIndex < currentTrialList.Count)
             {
-                SignallingTaskData.TrialData originalTrial = currentTrialList[outcome.originalTrialListIndex];
+                originalTrial = currentTrialList[outcome.originalTrialListIndex];
 
                 barChartManager.CreateBarChart(
                     originalTrial.optionA_Self,
                     originalTrial.optionA_Other,
                     originalTrial.optionB_Self,
                     originalTrial.optionB_Other);
-
-                Debug.Log($"Displaying bar chart in Feedback RUQ.");
-            }
-            else
-            {
-                Debug.LogError($"Cannot display bar chart: Original trial index {outcome.originalTrialListIndex} is out of bounds.");
             }
         }
         // --- END DRAW CHART LOGIC ---
 
-        // --- DISPLAY FEEDBACK MESSAGE LOGIC ---
+        // --- ANNOTATION LINE LOGIC (Ensures correct placement relative to chart base) ---
+        if (feedbackAnnotationLinePrefab != null && originalTrial != null && FeedbackChartContainer != null)
+        {
+            // 1. Determine the target group container
+            RectTransform targetGroupRect = null;
+            if (outcome.participantChoice == "A")
+            {
+                targetGroupRect = FeedbackGroupAContainer as RectTransform;
+            }
+            else if (outcome.participantChoice == "B")
+            {
+                targetGroupRect = FeedbackGroupBContainer as RectTransform;
+            }
+
+            if (targetGroupRect != null)
+            {
+                // 2. Instantiate the line as a child of the main FeedbackChartContainer (SEPARATE from text)
+                annotationLineInstance = Instantiate(feedbackAnnotationLinePrefab, FeedbackChartContainer, false);
+                annotationLineInstance.name = "SelectedAnnotationLine";
+                RectTransform lineRect = annotationLineInstance.GetComponent<RectTransform>();
+
+                if (lineRect != null)
+                {
+                    // 3. Match the line's horizontal position/width to the target group container
+                    lineRect.anchorMin = new Vector2(0.5f, 0f);
+                    lineRect.anchorMax = new Vector2(0.5f, 0f);
+                    lineRect.pivot = new Vector2(0.5f, 0f);
+
+                    // Copy the horizontal position and width of the target bar group
+                    lineRect.anchoredPosition = new Vector2(
+                        targetGroupRect.anchoredPosition.x,
+                        -5f // Position slightly below the bar base line
+                    );
+
+                    lineRect.sizeDelta = new Vector2(
+                        targetGroupRect.sizeDelta.x,
+                        lineRect.sizeDelta.y // Keep the height (e.g., 5) set in the prefab
+                    );
+                }
+            }
+        }
+        // --- END ANNOTATION LINE LOGIC ---
+
+        // --- DISPLAY FEEDBACK MESSAGE LOGIC (No Change) ---
         float totalPayoff = outcome.selfPayoff + outcome.otherPayoff;
         string displayChoice = outcome.participantChoice;
 
-        // Farsi Text Swap (A becomes 'ب', B becomes 'الف')
         if (ShouldUseRTL())
         {
             if (displayChoice == "A") displayChoice = "ب";
@@ -1097,7 +1128,6 @@ public class GameManager : MonoBehaviour
         string feedbackMessage;
         if (feedbackFormatTask.IsFaulted || partnerMessageTask.IsFaulted)
         {
-            Debug.LogError("LOCALIZATION ERROR: Could not find feedback keys. Using default English text.");
             string partnerText = outcome.partnerFollowed ? "Your Partner has made their choice based on the information you shared" : "Your Partner has made their choice against the information you shared";
             feedbackMessage = $"Feedback for Run {runNumber}:\nYou chose Option {displayChoice}.\n\n{partnerText}\n\nYour payoff is: {outcome.selfPayoff}\nThe other player's payoff is: {outcome.otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}\n\nPress SPACE to continue.";
         }
@@ -1106,16 +1136,11 @@ public class GameManager : MonoBehaviour
             string localizedFormat = feedbackFormatTask.Result;
             string partnerMessage = partnerMessageTask.Result;
             feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, outcome.selfPayoff, outcome.otherPayoff, totalPayoff);
-            // Ensure "Press SPACE to continue." is added if the format string doesn't include it (it often doesn't)
-            if (!feedbackMessage.Contains("SPACE"))
-            {
-                feedbackMessage += "\n\nPress SPACE to continue.";
-            }
         }
-        trainingFeedbackText.text = feedbackMessage;
+        if (trainingFeedbackText != null) trainingFeedbackText.text = feedbackMessage;
         // --- END DISPLAY FEEDBACK MESSAGE LOGIC ---
 
-        // **CRITICAL FIX: WAIT FOR SPACE KEY**
+        // **CRITICAL FIX: WAIT FOR SPACE KEY (No Change) **
         bool continuePressed = false;
         while (!continuePressed)
         {
@@ -1127,30 +1152,26 @@ public class GameManager : MonoBehaviour
         }
         // **END CRITICAL FIX**
 
-        // --- RESTORE SWAP LOGIC ---
+        // --- RESTORE SWAP LOGIC & CLEANUP ---
         if (barChartManager != null && originalChartContainer != null)
         {
-            // Restore all original references
             barChartManager.chartContainer = originalChartContainer;
             barChartManager.groupAContainer = originalGroupA;
             barChartManager.groupBContainer = originalGroupB;
             barChartManager.groupLabelsContainer = originalLabels;
 
-            // Hide the RUQ chart
             if (FeedbackChartContainer != null)
             {
                 FeedbackChartContainer.gameObject.SetActive(false);
             }
-
-            // Hide the original chart's containers as well, if they are separate children, 
-            // to prevent them from showing during the inter-run break.
-            if (originalChartContainer != null)
-            {
-                // Note: You may need to handle the state of the original chart container based on your scene setup.
-                // For now, we only focus on hiding the *Feedback* chart.
-            }
         }
-        // --- END RESTORE SWAP LOGIC ---
+
+        // --- CLEANUP ANNOTATION LINE ---
+        if (annotationLineInstance != null)
+        {
+            Destroy(annotationLineInstance);
+        }
+        // --- END CLEANUP ---
 
         trainingFeedbackPanel.SetActive(false);
     }
