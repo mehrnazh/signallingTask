@@ -75,8 +75,7 @@ MonoBehaviour:
     m_Localized: 'Task complete.
 
 
-      One trial from each task will be randomly
-      selected for payment.\nThank you for participating.'
+      Thank you for participating.'
     m_Metadata:
       m_Items: []
   - m_Id: 2073209707945984
@@ -152,11 +151,14 @@ MonoBehaviour:
       Your payoff: {3}
 
       Other
-      player''s payoff: {4}\n\nTotal payoff for this choice: {5}
+      player''s payoff: {4}
 
 
-      Press SPACE
-      to continue.'
+      Total payoff for this choice: {5}
+
+
+      Press
+      SPACE to continue.'
     m_Metadata:
       m_Items: []
   - m_Id: 69488320114057216

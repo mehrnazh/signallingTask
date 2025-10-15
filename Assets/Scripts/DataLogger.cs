@@ -7,7 +7,7 @@ public static class DataLogger
 {
     private static List<string> csvLines = new List<string>();
     private static float startTime = 0f;
-    private static string currentFilePath = ""; // Stores the path for the session
+    private static string currentFilePath = "";
 
     /// <summary>
     /// Initializes the logger, clears previous data, and sets the CSV header.
@@ -16,8 +16,8 @@ public static class DataLogger
     {
         startTime = Time.realtimeSinceStartup;
         csvLines.Clear();
-        // Updated header to better reflect the new FeedbackTrial log format
-        csvLines.Add("ParticipantID,EventNumber,AbsoluteTime,TaskTypeOrEvent,MessageChosenOrResponse,ReactionTime,BarData");
+        // UPDATED HEADER: Added FeedbackTrialStatus column
+        csvLines.Add("ParticipantID,EventNumber,AbsoluteTime,TaskTypeOrEvent,MessageChosenOrResponse,ReactionTime,BarData,FeedbackTrialStatus");
     }
 
     /// <summary>
@@ -25,23 +25,18 @@ public static class DataLogger
     /// </summary>
     public static void Reset()
     {
-        currentFilePath = ""; // Clear the file path
-        Initialize();         // Re-initialize lists and timers
+        currentFilePath = "";
+        Initialize();
         Debug.Log("DataLogger has been reset for a new session.");
     }
 
     /// <summary>
     /// Sets the full file path for the session's data log. Must be called once during setup.
     /// </summary>
-    /// <param name="participantId">The ID of the participant.</param>
-    /// <param name="taskType">The type of task being run ("Deception" or "Control").</param>
-    /// <param name="series">The instruction series (1 or 2).</param>
     public static void SetFilePath(string participantId, string taskType, int series)
     {
-        // Only set the path if it hasn't been set yet.
         if (string.IsNullOrEmpty(currentFilePath))
         {
-            // Use the provided parameters to construct a unique, descriptive filename.
             string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string filename = $"PID-{participantId}_Task-{taskType}_Series-{series}_{timestamp}.csv";
             currentFilePath = Path.Combine(Application.persistentDataPath, filename);
@@ -52,14 +47,19 @@ public static class DataLogger
     /// <summary>
     /// Logs data for a regular trial.
     /// </summary>
-    public static void LogTrial(int eventNumber, string taskType, string messageChosen, float reactionTime, List<float> barData)
+    // MODIFIED: Added isFeedbackTrial parameter
+    public static void LogTrial(int eventNumber, string taskType, string messageChosen, float reactionTime, List<float> barData, bool isFeedbackTrial)
     {
         float absoluteTime = Time.realtimeSinceStartup - startTime;
         string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID";
         string barDataString = barData != null ? string.Join(",", barData.Select(b => b.ToString("F2"))) : "N/A";
-        string line = string.Format("{0},{1},{2:F4},{3},{4},{5:F4},{6}",
+
+        // NEW COLUMN VALUE
+        string feedbackStatus = isFeedbackTrial ? "Selected" : "NotSelected";
+
+        string line = string.Format("{0},{1},{2:F4},{3},{4},{5:F4},{6},{7}",
                                     participantId, eventNumber, absoluteTime, taskType, messageChosen, reactionTime,
-                                    barDataString
+                                    barDataString, feedbackStatus
                                    );
         csvLines.Add(line);
     }
@@ -77,12 +77,34 @@ public static class DataLogger
         // Format: SelfPayoff,OtherPayoff,PartnerAction
         string barDataString = $"{selfPayoff:F2},{otherPayoff:F2},{partnerResult}";
 
-        // Note: ReactionTime is logged as "N/A" here because this entry logs the OUTCOME, 
-        // the RT for the decision is already logged in the preceding LogTrial call.
-        string line = string.Format("{0},{1},{2:F4},{3},{4},{5},{6}",
-                                    participantId, eventNumber, absoluteTime, "FeedbackTrial",
+        // Note: ReactionTime is logged as "N/A" here because this entry logs the OUTCOME.
+        string line = string.Format("{0},{1},{2:F4},{3},{4},{5},{6},{7}",
+                                    participantId, eventNumber, absoluteTime, "FeedbackTrialOutcome",
                                     participantChoice, "N/A",
-                                    barDataString
+                                    barDataString, "Outcome" // FeedbackTrialStatus: Outcome
+                                   );
+        csvLines.Add(line);
+    }
+
+    // NEW METHOD: Log Final Payoff
+    /// <summary>
+    /// Logs the final calculated payoff at the end of the experiment.
+    /// </summary>
+    public static void LogFinalPayoff(float finalSelfPayoff, float finalOtherPayoff, int trialsCounted)
+    {
+        float absoluteTime = Time.realtimeSinceStartup - startTime;
+        string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID";
+
+        float finalTotalPayoff = finalSelfPayoff + finalOtherPayoff;
+
+        // Log the final payoffs in the MessageChosenOrResponse column
+        // Format: FinalSelfPayoff,FinalOtherPayoff,FinalTotalPayoff,TrialsCounted
+        string payoffData = $"{finalSelfPayoff:F2},{finalOtherPayoff:F2},{finalTotalPayoff:F2},{trialsCounted}";
+
+        string line = string.Format("{0},{1},{2:F4},{3},{4},{5},{6},{7}",
+                                    participantId, 9999, absoluteTime, "FinalPayoffSummary",
+                                    payoffData, "N/A",
+                                    "N/A", "Final"
                                    );
         csvLines.Add(line);
     }
@@ -94,9 +116,10 @@ public static class DataLogger
     {
         float absoluteTime = Time.realtimeSinceStartup - startTime;
         string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID";
-        string line = string.Format("{0},{1},{2:F4},{3},{4},{5:F4},{6}",
+        // MODIFIED: Added final column as "N/A"
+        string line = string.Format("{0},{1},{2:F4},{3},{4},{5:F4},{6},{7}",
                                     participantId, eventNumber, absoluteTime, "AttentionTest", response, reactionTime,
-                                    "N/A"
+                                    "N/A", "N/A"
                                    );
         csvLines.Add(line);
     }
@@ -108,21 +131,43 @@ public static class DataLogger
     {
         float absoluteTime = Time.realtimeSinceStartup - startTime;
         string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID";
-        string line = string.Format("{0},{1},{2:F4},{3},{4},{5},{6}",
+        // MODIFIED: Added final column as "N/A"
+        string line = string.Format("{0},{1},{2:F4},{3},{4},{5},{6},{7}",
                                     participantId, eventNumberBeforeBreak, absoluteTime, "InterRunStart",
-                                    "N/A", "N/A", "N/A"
+                                    "N/A", "N/A", "N/A", "N/A"
                                    );
         csvLines.Add(line);
     }
+
+    // NEW METHOD: Log Training Trial
+    /// <summary>
+    /// Logs data for a training trial.
+    /// </summary>
+    public static void LogTrainingTrial(int trialNumber, string participantChoice, string correctAnswer, float reactionTime)
+    {
+        float absoluteTime = Time.realtimeSinceStartup - startTime;
+        string participantId = GameManager.Instance != null ? GameManager.Instance.GetParticipantId() : "UNKNOWN_ID";
+        string outcome = (participantChoice == correctAnswer) ? "Correct" : "Incorrect";
+
+        // MessageChosenOrResponse: {Choice} ({Outcome})
+        string choiceAndOutcome = $"{participantChoice} ({outcome})";
+
+        string line = string.Format("{0},{1},{2:F4},{3},{4},{5:F4},{6},{7}",
+                                    participantId, trialNumber, absoluteTime, "TrainingTrial",
+                                    choiceAndOutcome, reactionTime,
+                                    correctAnswer, "N/A" // BarData: CorrectAnswer
+                                   );
+        csvLines.Add(line);
+    }
+
 
     /// <summary>
     /// Saves the current data log. This is the final save point.
     /// </summary>
     public static void SaveData(string participantId, string taskType, int series)
     {
-        // Ensure the path is set before the final save, in case SetFilePath was missed earlier.
         SetFilePath(participantId, taskType, series);
-        FlushData(); // Calls the flush method for the final save
+        FlushData();
     }
 
     /// <summary>
@@ -131,7 +176,6 @@ public static class DataLogger
     /// </summary>
     public static void FlushData()
     {
-        // Don't save if path is not set or only header exists
         if (string.IsNullOrEmpty(currentFilePath) || csvLines.Count < 2)
         {
             Debug.LogWarning("DataLogger: Flush skipped. File path not set or only header exists.");
@@ -140,9 +184,7 @@ public static class DataLogger
 
         try
         {
-            // Create a copy to write to avoid modification during the operation
             List<string> linesToWrite = new List<string>(csvLines);
-            // File.WriteAllLines is synchronous and must complete before quitting
             File.WriteAllLines(currentFilePath, linesToWrite.ToArray());
             Debug.Log($"Data flushed successfully ({linesToWrite.Count} lines) to: {currentFilePath}");
         }

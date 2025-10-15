@@ -2649,15 +2649,15 @@ MonoBehaviour:
   endExperimentButton: {fileID: 561879211}
   currentTask: 1
   currentSeries: 1
-  totalTrials: 5
-  trialsPerRun: 1
+  totalTrials: 45
+  trialsPerRun: 9
   trialOnsetDuration: 2
   decisionConfirmationMin: 2
   decisionConfirmationMax: 4
   fixationMin: 2
   fixationMax: 4
   interRunInterval: 10
-  closeDelay: 10
+  closeDelay: 15
   annotationImageCenter: {fileID: 1064715034}
   annotationImageLeft: {fileID: 1030093563}
   annotationImageRight: {fileID: 445922873}

@@ -9,6 +9,7 @@ using UnityEngine.Localization.Settings;
 using UnityEngine.Localization.Tables;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Globalization; // Added for number formatting
 //using SignallingTaskData;
 
 // Enum to distinguish between task types.
@@ -46,11 +47,10 @@ public class GameManager : MonoBehaviour
 
     [Header("Feedback Visuals")]
     public RectTransform FeedbackChartContainer; // Assign the RUQ chart container here.
-    public Transform FeedbackGroupAContainer; // <-- ADD THIS
-    public Transform FeedbackGroupBContainer; // <-- ADD THIS
-    public RectTransform FeedbackGroupLabelsContainer; // <-- ADD THIS
-    public GameObject feedbackAnnotationLinePrefab; // <--- NEW: Assign your line prefab here!
-
+    public Transform FeedbackGroupAContainer;
+    public Transform FeedbackGroupBContainer;
+    public RectTransform FeedbackGroupLabelsContainer;
+    public GameObject feedbackAnnotationLinePrefab; // <--- ADDED: Line Prefab for feedback annotation
 
     [Header("Buttons")]
     public Button optionAButton;
@@ -165,6 +165,31 @@ public class GameManager : MonoBehaviour
         // Check if the selected locale's code is Farsi ('fa')
         return LocalizationSettings.SelectedLocale != null &&
                LocalizationSettings.SelectedLocale.Identifier.Code == "fa";
+    }
+
+    /// <summary>
+    /// Formats a float to a custom RTL string (Farsi format: decimal part / integer part) 
+    /// using InvariantCulture for the split, then swapping parts for display.
+    /// </summary>
+    private string FormatRTLNumber(float number)
+    {
+        // Use InvariantCulture to ensure '.' is used as the decimal separator for splitting
+        string numStr = number.ToString("G", System.Globalization.CultureInfo.InvariantCulture);
+        string[] parts = numStr.Split('.');
+
+        if (ShouldUseRTL())
+        {
+            // Custom format: decimal part / integer part (e.g., 99/5)
+            if (parts.Length == 1)
+                return parts[0];
+
+            // The Unity RTL component handles Western digits (0-9) to Farsi digits (۰-۹) automatically.
+            return $"{parts[1]}/{parts[0]}";
+        }
+        else
+        {
+            return numStr;
+        }
     }
 
     void Awake()
@@ -423,38 +448,10 @@ public class GameManager : MonoBehaviour
         if (currentTask == TaskType.Deception)
         {
             currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-            //if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-            //{
-            //    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-            //    Debug.Log($"Loaded {currentTrialList.Count} Deception trials.");
-            //}
-            //else
-            //{
-            //    Debug.LogError("SignallingTrialLoader.Instance.DeceptionTrials is null or empty! Cannot proceed.");
-            //    currentTrialList = new List<SignallingTaskData.TrialData>();
-            //}
         }
         else
         {
             currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
-            //if (SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials.Count > 0)
-            //{
-            //    currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.ControlTrials);
-            //    Debug.Log($"Loaded {currentTrialList.Count} Control trials.");
-            //}
-            //else
-            //{
-            //    Debug.LogWarning("SignallingTrialLoader.Instance.ControlTrials is null or empty. Using Deception trials as fallback for Control task.");
-            //    if (SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials != null && SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials.Count > 0)
-            //    {
-            //        currentTrialList = new List<SignallingTaskData.TrialData>(SignallingTaskData.SignallingTrialLoader.Instance.DeceptionTrials);
-            //    }
-            //    else
-            //    {
-            //        Debug.LogError("Fallback failed: SignallingTrialLoader.Instance.DeceptionTrials is also null or empty! Cannot proceed.");
-            //        currentTrialList = new List<SignallingTaskData.TrialData>();
-            //    }
-            //}
         }
 
         ShuffleTrials(currentTrialList);
@@ -586,7 +583,6 @@ public class GameManager : MonoBehaviour
                 break;
         }
     }
-    // In GameManager.cs
 
     IEnumerator RunTrainingSession()
     {
@@ -596,7 +592,7 @@ public class GameManager : MonoBehaviour
         trialInfoText.text = "Training";
 
         // Load the localized template string once before the loop
-        Task<string> instructionFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_progress"); // <-- Semantic Key
+        Task<string> instructionFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_progress");
 
         for (int i = 0; i < trainingTrials.Count; i++)
         {
@@ -715,6 +711,8 @@ public class GameManager : MonoBehaviour
 
             string choice = "";
             bool decisionMadeThisTrial = false;
+            float trainingDecisionStartTime = Time.realtimeSinceStartup; // NEW: Start tracking RT
+
             optionAButton.onClick.RemoveAllListeners();
             optionBButton.onClick.RemoveAllListeners();
             optionAButton.onClick.AddListener(() => { choice = "A"; decisionMadeThisTrial = true; });
@@ -735,8 +733,14 @@ public class GameManager : MonoBehaviour
                 yield return null;
             }
 
-            Debug.Log($"Training: Participant chose option {choice}.");
+            float trainingResponseTime = Time.realtimeSinceStartup - trainingDecisionStartTime;
+            string correctAnswer = training.correctAnswer; // Assumed field in TrainingTrial struct
+
+            Debug.Log($"Training: Participant chose option {choice}. RT: {trainingResponseTime:F3}s");
             SetButtonInteraction(false);
+
+            // *** LOGGING CALL for Training Trial ***
+            DataLogger.LogTrainingTrial(i + 1, choice, correctAnswer, trainingResponseTime);
 
             // Post-Decision Annotations: Use the fixed timer wait.
             if (choice == "A")
@@ -754,7 +758,7 @@ public class GameManager : MonoBehaviour
                 trainingContinueButton.gameObject.SetActive(false);
             }
 
-            bool partnerFollowed = Random.value > 0.3f;
+            bool partnerFollowed = Random.value > 0.22f;
 
             float selfPayoff, otherPayoff;
             if (partnerFollowed)
@@ -769,12 +773,23 @@ public class GameManager : MonoBehaviour
             }
             float totalPayoff = selfPayoff + otherPayoff;
 
-            // --- Farsi Text Swap ---
+            // --- Farsi Text Swap and Formatting ---
             string displayChoice = choice;
+
+            // Default formatting
+            string selfPayoffStr = selfPayoff.ToString();
+            string otherPayoffStr = otherPayoff.ToString();
+            string totalPayoffStr = totalPayoff.ToString();
+
             if (ShouldUseRTL())
             {
                 if (choice == "A") displayChoice = "ب";
                 else if (choice == "B") displayChoice = "الف";
+
+                // CRITICAL FIX: Use the custom RTL formatter
+                selfPayoffStr = FormatRTLNumber(selfPayoff);
+                otherPayoffStr = FormatRTLNumber(otherPayoff);
+                totalPayoffStr = FormatRTLNumber(totalPayoff);
             }
 
             string partnerMessageKey = partnerFollowed ? "partner_followed_msg" : "partner_ignored_msg";
@@ -788,15 +803,17 @@ public class GameManager : MonoBehaviour
             {
                 Debug.LogError("LOCALIZATION ERROR: Could not find feedback keys. Using default English text.");
                 string partnerText = partnerFollowed ? "Your Partner has made their choice based on the information you shared" : "Your Partner has made their choice against the information you shared";
-                feedbackMessage = $"You chose Option {displayChoice}.\n\n{partnerText}\n\nYour payoff is: {selfPayoff}\nThe other player's payoff is: {otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}\n\nPress SPACE to continue.";
+                feedbackMessage = $"You chose Option {displayChoice}.\n\n{partnerText}\n\nYour payoff is: {selfPayoffStr}\nThe other player's payoff is: {otherPayoffStr}\n\nThe total payoff for this choice is: {totalPayoffStr}\n\nPress SPACE to continue.";
             }
             else
             {
                 string localizedFormat = feedbackFormatTask.Result;
                 string partnerMessage = partnerMessageTask.Result;
-                feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, selfPayoff, otherPayoff, totalPayoff);
+
+                // Pass the pre-formatted strings to string.Format
+                feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, selfPayoffStr, otherPayoffStr, totalPayoffStr);
             }
-            // --- End Farsi Text Swap ---
+            // --- End Farsi Text Swap and Formatting ---
 
             trainingFeedbackText.text = feedbackMessage;
 
@@ -823,8 +840,6 @@ public class GameManager : MonoBehaviour
         trialPanel.SetActive(false);
         Debug.Log("--- Training Session Complete ---");
     }
-
-    // --- REMOVED: WaitForAnnotationDisplayOrKey is now integrated into RunTrainingSession. ---
 
     private IEnumerator ShowAnnotation(TrainingTrial.Annotation annotation, float duration)
     {
@@ -959,7 +974,7 @@ public class GameManager : MonoBehaviour
                 {
                     Debug.LogError($"Adjusted trial index {adjustedIndex} is out of bounds for currentTrialList (size: {currentTrialList.Count}) at event index {eventIndex}. Skipping and logging as an error.");
                     trialResponses.Add("Error/Skipped_OutOfBounds");
-                    DataLogger.LogTrial(eventCounter, "Error", "Skipped_OutOfBounds", 0f, new List<float>());
+                    DataLogger.LogTrial(eventCounter, "Error", "Skipped_OutOfBounds", 0f, new List<float>(), false); // Added false flag
                 }
             }
             Debug.Log($"---------- Event {eventCounter} Finished ----------");
@@ -972,7 +987,15 @@ public class GameManager : MonoBehaviour
                 int outcomeIndex = feedbackTrialOutcomes.Count - 1; // Last added outcome
                 if (outcomeIndex >= 0)
                 {
-                    yield return StartCoroutine(DisplayRunFeedback(feedbackTrialOutcomes[outcomeIndex], run + 1));
+                    Task feedbackTask = DisplayRunFeedback(feedbackTrialOutcomes[outcomeIndex], run + 1);
+
+                    // Wait until the async Task is complete
+                    yield return new WaitUntil(() => feedbackTask.IsCompleted);
+
+                    if (feedbackTask.IsFaulted)
+                    {
+                        Debug.LogError($"Feedback Task failed: {feedbackTask.Exception}");
+                    }
                 }
                 // --- END NEW LOGIC: RUN FEEDBACK ---
 
@@ -1013,7 +1036,9 @@ public class GameManager : MonoBehaviour
         Debug.Log("RunAllTrials: All runs completed.");
         EndTrials();
     }
-    IEnumerator DisplayRunFeedback(FeedbackTrialOutcome outcome, int runNumber)
+    // GameManager.cs
+
+    async Task DisplayRunFeedback(FeedbackTrialOutcome outcome, int runNumber)
     {
         trialPanel.SetActive(false);
         fixationPanel.SetActive(false);
@@ -1027,7 +1052,7 @@ public class GameManager : MonoBehaviour
 
         GameObject annotationLineInstance = null;
 
-        // --- CRITICAL SWAP LOGIC ---
+        // --- CRITICAL SWAP LOGIC (omitted) ---
         RectTransform originalChartContainer = null;
         Transform originalGroupA = null;
         Transform originalGroupB = null;
@@ -1056,45 +1081,36 @@ public class GameManager : MonoBehaviour
             if (outcome.originalTrialListIndex >= 0 && outcome.originalTrialListIndex < currentTrialList.Count)
             {
                 originalTrial = currentTrialList[outcome.originalTrialListIndex];
-
-                barChartManager.CreateBarChart(
-                    originalTrial.optionA_Self,
-                    originalTrial.optionA_Other,
-                    originalTrial.optionB_Self,
-                    originalTrial.optionB_Other);
+                barChartManager.CreateBarChart(originalTrial.optionA_Self, originalTrial.optionA_Other, originalTrial.optionB_Self, originalTrial.optionB_Other);
             }
         }
         // --- END DRAW CHART LOGIC ---
 
-        // --- ANNOTATION LINE LOGIC (Ensures correct placement relative to chart base) ---
+        // --- ANNOTATION LINE LOGIC (FIXED) ---
         if (feedbackAnnotationLinePrefab != null && originalTrial != null && FeedbackChartContainer != null)
         {
-            // 1. Determine the target group container
             RectTransform targetGroupRect = null;
+
+            // FIX: Use GetComponent<RectTransform>() for safety, as the public variables are Transform
             if (outcome.participantChoice == "A")
-            {
-                targetGroupRect = FeedbackGroupAContainer as RectTransform;
-            }
+                targetGroupRect = FeedbackGroupAContainer.GetComponent<RectTransform>();
             else if (outcome.participantChoice == "B")
-            {
-                targetGroupRect = FeedbackGroupBContainer as RectTransform;
-            }
+                targetGroupRect = FeedbackGroupBContainer.GetComponent<RectTransform>();
 
             if (targetGroupRect != null)
             {
-                // 2. Instantiate the line as a child of the main FeedbackChartContainer (SEPARATE from text)
+                // Instantiate the line as a child of the main FeedbackChartContainer
                 annotationLineInstance = Instantiate(feedbackAnnotationLinePrefab, FeedbackChartContainer, false);
                 annotationLineInstance.name = "SelectedAnnotationLine";
                 RectTransform lineRect = annotationLineInstance.GetComponent<RectTransform>();
 
                 if (lineRect != null)
                 {
-                    // 3. Match the line's horizontal position/width to the target group container
                     lineRect.anchorMin = new Vector2(0.5f, 0f);
                     lineRect.anchorMax = new Vector2(0.5f, 0f);
                     lineRect.pivot = new Vector2(0.5f, 0f);
 
-                    // Copy the horizontal position and width of the target bar group
+                    // Copy the horizontal position and size from the target group
                     lineRect.anchoredPosition = new Vector2(
                         targetGroupRect.anchoredPosition.x,
                         -5f // Position slightly below the bar base line
@@ -1102,45 +1118,71 @@ public class GameManager : MonoBehaviour
 
                     lineRect.sizeDelta = new Vector2(
                         targetGroupRect.sizeDelta.x,
-                        lineRect.sizeDelta.y // Keep the height (e.g., 5) set in the prefab
+                        // Preserve the height defined in the prefab
+                        lineRect.sizeDelta.y
                     );
+
+                    Debug.Log($"Annotation line placed under {outcome.participantChoice} at X: {lineRect.anchoredPosition.x}");
                 }
+            }
+            else
+            {
+                Debug.LogError($"Annotation placement failed: Target RectTransform for choice '{outcome.participantChoice}' not found or is null.");
             }
         }
         // --- END ANNOTATION LINE LOGIC ---
 
-        // --- DISPLAY FEEDBACK MESSAGE LOGIC (No Change) ---
+        // --- DISPLAY FEEDBACK MESSAGE LOGIC (omitted) ---
         float totalPayoff = outcome.selfPayoff + outcome.otherPayoff;
         string displayChoice = outcome.participantChoice;
+
+        string selfPayoffStr = outcome.selfPayoff.ToString();
+        string otherPayoffStr = outcome.otherPayoff.ToString();
+        string totalPayoffStr = totalPayoff.ToString();
 
         if (ShouldUseRTL())
         {
             if (displayChoice == "A") displayChoice = "ب";
             else if (displayChoice == "B") displayChoice = "الف";
+
+            selfPayoffStr = FormatRTLNumber(outcome.selfPayoff);
+            otherPayoffStr = FormatRTLNumber(outcome.otherPayoff);
+            totalPayoffStr = FormatRTLNumber(totalPayoff);
         }
 
         string partnerMessageKey = outcome.partnerFollowed ? "partner_followed_msg" : "partner_ignored_msg";
 
-        var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "training_feedback_message");
+        var feedbackFormatTask = GetLocalizedStringAsync(UILocalizationTable, "run_feedback_message");
         var partnerMessageTask = GetLocalizedStringAsync(UILocalizationTable, partnerMessageKey);
-        yield return new WaitUntil(() => feedbackFormatTask.IsCompleted && partnerMessageTask.IsCompleted);
+        await Task.WhenAll(feedbackFormatTask, partnerMessageTask);
 
         string feedbackMessage;
         if (feedbackFormatTask.IsFaulted || partnerMessageTask.IsFaulted)
         {
+            // Fallback structure
             string partnerText = outcome.partnerFollowed ? "Your Partner has made their choice based on the information you shared" : "Your Partner has made their choice against the information you shared";
-            feedbackMessage = $"Feedback for Run {runNumber}:\nYou chose Option {displayChoice}.\n\n{partnerText}\n\nYour payoff is: {outcome.selfPayoff}\nThe other player's payoff is: {outcome.otherPayoff}\n\nThe total payoff for this choice is: {totalPayoff}\n\nPress SPACE to continue.";
+            feedbackMessage = $"Feedback for Run {runNumber}:\nYou chose Option {displayChoice}.\n\n{partnerText}\n\nYour payoff is: {selfPayoffStr}\nThe other player's payoff is: {otherPayoffStr}\n\nThe total payoff for this choice is: {totalPayoffStr}\n\nPress SPACE to continue.";
         }
         else
         {
             string localizedFormat = feedbackFormatTask.Result;
             string partnerMessage = partnerMessageTask.Result;
-            feedbackMessage = string.Format(localizedFormat, displayChoice, partnerMessage, outcome.selfPayoff, outcome.otherPayoff, totalPayoff);
+
+            // REORDERED ARGUMENTS
+            feedbackMessage = string.Format(localizedFormat,
+                runNumber,          // Index 0: For {0} (Run Number)
+                displayChoice,      // Index 1: For {1} (Option Chosen)
+                partnerMessage,     // Index 2: For {2} (Partner Message)
+                selfPayoffStr,      // Index 3: For {3} (Self Payoff)
+                otherPayoffStr,     // Index 4: For {4} (Other Payoff)
+                totalPayoffStr      // Index 5: For {5} (Total Payoff)
+            );
+
         }
         if (trainingFeedbackText != null) trainingFeedbackText.text = feedbackMessage;
         // --- END DISPLAY FEEDBACK MESSAGE LOGIC ---
 
-        // **CRITICAL FIX: WAIT FOR SPACE KEY (No Change) **
+        // --- WAIT FOR SPACE KEY & CLEANUP (omitted) ---
         bool continuePressed = false;
         while (!continuePressed)
         {
@@ -1148,11 +1190,9 @@ public class GameManager : MonoBehaviour
             {
                 continuePressed = true;
             }
-            yield return null;
+            await Task.Yield();
         }
-        // **END CRITICAL FIX**
 
-        // --- RESTORE SWAP LOGIC & CLEANUP ---
         if (barChartManager != null && originalChartContainer != null)
         {
             barChartManager.chartContainer = originalChartContainer;
@@ -1166,12 +1206,10 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // --- CLEANUP ANNOTATION LINE ---
         if (annotationLineInstance != null)
         {
             Destroy(annotationLineInstance);
         }
-        // --- END CLEANUP ---
 
         trainingFeedbackPanel.SetActive(false);
     }
@@ -1264,7 +1302,6 @@ public class GameManager : MonoBehaviour
     IEnumerator RunTrial(SignallingTaskData.TrialData trial, int eventNumber)
     {
         int totalEventCount = (currentTrialList?.Count ?? 0) + (attentionTests?.Count ?? 0);
-        // Corrected property access to use underscores: optionA_Self, optionA_Other, optionB_Self, optionB_Other
         Debug.Log($"RunTrial {eventNumber}/{totalEventCount}: Start. Type: {currentTask}. A:[{trial.optionA_Self},{trial.optionA_Other}], B:[{trial.optionB_Self},{trial.optionB_Other}]");
         optionAButton?.gameObject.SetActive(true);
         optionBButton?.gameObject.SetActive(true);
@@ -1275,12 +1312,10 @@ public class GameManager : MonoBehaviour
         fixationPanel.SetActive(false);
 
         // --- CHART ACTIVATION (TRIAL) ---
-        // 1. Ensure the main trial chart is visible
         if (barChartManager != null && barChartManager.chartContainer != null)
         {
             barChartManager.chartContainer.gameObject.SetActive(true);
         }
-        // 2. Hide the duplicate RUQ chart
         if (FeedbackChartContainer != null)
         {
             FeedbackChartContainer.gameObject.SetActive(false);
@@ -1300,7 +1335,6 @@ public class GameManager : MonoBehaviour
 
         if (barChartManager != null)
         {
-            // Corrected property access to use underscores
             barChartManager.CreateBarChart(trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other);
         }
         else { Debug.LogWarning($"RunTrial {eventNumber}: BarChartManager not found."); }
@@ -1338,35 +1372,33 @@ public class GameManager : MonoBehaviour
         Debug.Log($"RunTrial {eventNumber}: Decision Made. Choice: {messageChosen}, RT: {responseTime:F3}s");
 
         List<float> barData = new List<float> { trial.optionA_Self, trial.optionA_Other, trial.optionB_Self, trial.optionB_Other };
-        DataLogger.LogTrial(eventNumber, currentTask.ToString(), messageChosen, responseTime, barData);
+
+        // NEW FLAG: Track if this is selected for feedback
+        bool isFeedbackTrial = false;
 
         // --- NEW LOGIC: Check for Feedback Trial and Save Outcome ---
-        int trialListIndex = currentTrialList.IndexOf(trial);
-
-        // The first regular trial of the run is chosen for feedback
-        // Check if the current event is a regular trial AND the first trial slot in the run
         if (!attentionTestIndices.Contains(eventNumber - 1) && (eventNumber - 1) % trialsPerRun == 0)
         {
+            isFeedbackTrial = true; // Set the flag
+
             float selfPayoff, otherPayoff;
             bool partnerFollowed = Random.value > 0.3f; // 70% chance to follow
 
             if (partnerFollowed)
             {
-                // Corrected property access to use underscores
                 if (messageChosen == "A") { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
                 else { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
             }
             else
             {
                 // Partner ignores the message (chooses the opposite option)
-                // Corrected property access to use underscores
                 if (messageChosen == "A") { selfPayoff = trial.optionB_Self; otherPayoff = trial.optionB_Other; }
                 else { selfPayoff = trial.optionA_Self; otherPayoff = trial.optionA_Other; }
             }
 
             feedbackTrialOutcomes.Add(new FeedbackTrialOutcome
             {
-                originalTrialListIndex = trialListIndex,
+                originalTrialListIndex = currentTrialList.IndexOf(trial),
                 participantChoice = messageChosen,
                 selfPayoff = selfPayoff,
                 otherPayoff = otherPayoff,
@@ -1376,6 +1408,9 @@ public class GameManager : MonoBehaviour
             Debug.Log($"RunTrial {eventNumber}: Chosen for Run Feedback. Self: {selfPayoff}, Other: {otherPayoff}");
         }
         // --- END NEW LOGIC ---
+
+        // MODIFIED LOGGING CALL: Pass the isFeedbackTrial flag
+        DataLogger.LogTrial(eventNumber, currentTask.ToString(), messageChosen, responseTime, barData, isFeedbackTrial);
 
         float confirmationDuration = Random.Range(decisionConfirmationMin, decisionConfirmationMax);
         Debug.Log($"RunTrial {eventNumber}: Confirmation Phase ({confirmationDuration:F2}s)");
@@ -1404,12 +1439,10 @@ public class GameManager : MonoBehaviour
         fixationPanel.SetActive(false);
 
         // --- CHART ACTIVATION (TRIAL) ---
-        // 1. Ensure the main trial chart is visible
         if (barChartManager != null && barChartManager.chartContainer != null)
         {
             barChartManager.chartContainer.gameObject.SetActive(true);
         }
-        // 2. Hide the duplicate RUQ chart
         if (FeedbackChartContainer != null)
         {
             FeedbackChartContainer.gameObject.SetActive(false);
@@ -1606,12 +1639,16 @@ public class GameManager : MonoBehaviour
         // --- NEW LOGIC: Calculate and Display Final Payoff ---
         float finalSelfPayoff = 0;
         float finalOtherPayoff = 0;
+        int trialsCounted = feedbackTrialOutcomes.Count; // Store count for logging
         foreach (var outcome in feedbackTrialOutcomes)
         {
             finalSelfPayoff += outcome.selfPayoff;
             finalOtherPayoff += outcome.otherPayoff;
         }
         float finalTotalPayoff = finalSelfPayoff + finalOtherPayoff;
+
+        // *** NEW LOGGING CALL: Log the Final Payoff Summary ***
+        DataLogger.LogFinalPayoff(finalSelfPayoff, finalOtherPayoff, trialsCounted);
 
         // Get localized final message parts
         var endMessageTask = GetLocalizedStringAsync(UILocalizationTable, "end_experiment_text");
@@ -1622,22 +1659,29 @@ public class GameManager : MonoBehaviour
         string endMessage = endMessageTask.IsCompletedSuccessfully ? endMessageTask.Result : "[end_experiment_text]";
         string payoffSummary;
 
+        // Apply RTL formatting if necessary
+        string formattedSelf = ShouldUseRTL() ? FormatRTLNumber(finalSelfPayoff) : finalSelfPayoff.ToString("F2");
+        string formattedOther = ShouldUseRTL() ? FormatRTLNumber(finalOtherPayoff) : finalOtherPayoff.ToString("F2");
+        string formattedTotal = ShouldUseRTL() ? FormatRTLNumber(finalTotalPayoff) : finalTotalPayoff.ToString("F2");
+        string formattedCount = ShouldUseRTL() ? FormatRTLNumber((float)trialsCounted) : trialsCounted.ToString();
+
+
         if (payoffSummaryTask.IsCompletedSuccessfully)
         {
-            // Pass all four parameters, even if the localized string only uses {0}, {2}, and {3}.
+            // Pass the formatted strings
             payoffSummary = string.Format(payoffSummaryTask.Result,
-                                          finalSelfPayoff,
-                                          finalOtherPayoff,
-                                          finalTotalPayoff,
-                                          feedbackTrialOutcomes.Count);
+                                          formattedSelf,
+                                          formattedOther,
+                                          formattedTotal,
+                                          formattedCount);
         }
         else
         {
             Debug.LogError("LOCALIZATION ERROR: Failed to load final payoff summary. Using default.");
-            payoffSummary = $"\n\n--- FINAL PAYOFF SUMMARY (Based on {feedbackTrialOutcomes.Count} trials) ---\n" +
-                            $"Your Total Payoff (from sampled trials): {finalSelfPayoff}\n" +
-                            $"Other Player's Total Payoff: {finalOtherPayoff}\n" +
-                            $"Grand Total: {finalTotalPayoff}";
+            payoffSummary = $"\n\n--- FINAL PAYOFF SUMMARY (Based on {formattedCount} trials) ---\n" +
+                            $"Your Total Payoff (from sampled trials): {formattedSelf}\n" +
+                            $"Other Player's Total Payoff: {formattedOther}\n" +
+                            $"Grand Total: {formattedTotal}";
         }
         // --- END NEW LOGIC ---
 
